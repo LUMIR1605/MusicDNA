@@ -1,13 +1,15 @@
 import subprocess
 import numpy as np
 
+from core.runtime import require_binary
+
 SR = 48000
 
 
 def load_pcm(path, sample_rate=SR, mono=True):
 
     cmd = [
-        "ffmpeg",
+        require_binary("ffmpeg"),
         "-hide_banner",
         "-loglevel", "error",
         "-i", path,

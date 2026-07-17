@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://musicdna.local/schema/dna-output-v1.json",
+  "title": "MusicDNA output v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "audio",
+    "energy",
+    "beats",
+    "rhythm",
+    "spectrum",
+    "pitch",
+    "melody",
+    "structure",
+    "harmony",
+    "emotion",
+    "journey",
+    "curve",
+    "production",
+    "rules"
+  ],
+  "properties": {
+    "schema_version": {"const": "dna-output-v1"},
+    "audio": {"type": "object"},
+    "energy": {"type": "object"},
+    "beats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "first", "last"],
+      "properties": {
+        "count": {"type": "integer", "minimum": 0},
+        "first": {"type": ["number", "null"]},
+        "last": {"type": ["number", "null"]}
+      }
+    },
+    "rhythm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["transients", "beat_positions", "bpm"],
+      "properties": {
+        "transients": {"$ref": "#/$defs/position_measurement"},
+        "beat_positions": {"$ref": "#/$defs/position_measurement"},
+        "bpm": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["value", "status", "method"],
+          "properties": {
+            "value": {"type": ["number", "null"], "minimum": 0},
+            "status": {"enum": ["estimated", "unavailable"]},
+            "method": {"type": "string", "minLength": 1},
+            "reason": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    },
+    "spectrum": {"type": "object"},
+    "pitch": {"type": "object"},
+    "melody": {"type": "object"},
+    "structure": {"type": "object"},
+    "harmony": {"type": "object"},
+    "emotion": {"type": "object"},
+    "journey": {"type": "object"},
+    "curve": {"type": "object"},
+    "production": {"type": "object"},
+    "rules": {"type": "object"}
+  },
+  "$defs": {
+    "position_measurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["positions_seconds", "count", "status", "method"],
+      "properties": {
+        "positions_seconds": {
+          "type": "array",
+          "items": {"type": "number", "minimum": 0}
+        },
+        "count": {"type": "integer", "minimum": 0},
+        "status": {"enum": ["measured", "estimated", "unavailable"]},
+        "method": {"type": "string", "minLength": 1},
+        "reason": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

@@ -2,9 +2,11 @@ import subprocess
 import json
 import sys
 
+from core.runtime import require_binary
+
 def analyze_audio(path):
     cmd = [
-        "ffprobe",
+        require_binary("ffprobe"),
         "-v", "quiet",
         "-print_format", "json",
         "-show_format",

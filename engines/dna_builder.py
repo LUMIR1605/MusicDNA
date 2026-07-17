@@ -1,5 +1,5 @@
 from engines.energy_pcm import analyze as energy_analyze
-from engines.bpm_engine import detect_transients
+from engines.rhythm_engine import analyze as rhythm_analyze
 from engines.spectrum_engine import analyze as spectrum_analyze
 from engines.structure_engine import analyze as structure_analyze
 from engines.pitch_engine import analyze_pitch
@@ -12,12 +12,17 @@ from engines.dna_store import save as save_dna
 from engines.emotion_journey_engine import analyze as journey_analyze
 from engines.emotion_curve_engine import analyze as curve_analyze
 from engines.production_engine import analyze as production_analyze
+from core.runtime import require_core_capabilities
+from schema.validation import validate_dna
 
 def build(audio_file, title=None, metadata=None):
+    require_core_capabilities()
     dna = {
+        "schema_version": "dna-output-v1",
         "audio": {},
         "energy": {},
         "beats": {},
+        "rhythm": {},
         "spectrum": {},
         "pitch": {},
         "melody": {},
@@ -39,8 +44,10 @@ def build(audio_file, title=None, metadata=None):
         "avg": sum(energy) / len(energy),
     }
 
-    print("Loading Beats...")
-    beats = detect_transients(audio_file)
+    print("Loading Rhythm...")
+    rhythm = rhythm_analyze(audio_file)
+    dna["rhythm"] = rhythm
+    beats = rhythm["beat_positions"]["positions_seconds"]
     dna["beats"] = {
         "count": len(beats),
         "first": beats[0] if beats else None,
@@ -81,6 +88,8 @@ def build(audio_file, title=None, metadata=None):
 
     print("Loading Rules...")
     dna["rules"] = rules_analyze(dna)
+
+    validate_dna(dna)
 
     print("Loading Knowledge...")
     knowledge_analyze(title or audio_file, dna, metadata)

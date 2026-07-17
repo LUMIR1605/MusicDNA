@@ -1,16 +1,13 @@
 import json
 from pathlib import Path
 
-OUT = Path("dna")
+from core.paths import dna_output_directory, write_text_atomic
 
-OUT.mkdir(exist_ok=True)
 
-def save(name, dna):
-    filename = OUT / (Path(name).stem + ".json")
-    filename.write_text(
-        json.dumps(dna, indent=2, ensure_ascii=False),
-        encoding="utf-8"
-    )
+def save(name, dna, output_directory=None):
+    directory = Path(output_directory) if output_directory is not None else dna_output_directory()
+    filename = directory / (Path(name).stem + ".json")
+    write_text_atomic(filename, json.dumps(dna, indent=2, ensure_ascii=False))
     print(f"DNA zapisane: {filename}")
     return filename
 
