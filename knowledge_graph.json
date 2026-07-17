@@ -1,0 +1,92 @@
+[
+  {
+    "statement": "Utwór prowadzi słuchacza w kierunku nadziei.",
+    "confidence": 80.0,
+    "supported": 4,
+    "contradicted": 1,
+    "support_titles": [
+      "My Heart Will Go On (Love Theme from ＂Titanic＂)",
+      "Splecione Losy (Remastered)",
+      "Tiësto - Adagio For Strings",
+      "U2 - With Or Without You (TEEMID Edit)"
+    ],
+    "counter_titles": [
+      "Someone Like You"
+    ]
+  },
+  {
+    "statement": "Kulminacja opiera się na sile wykonania.",
+    "confidence": 60.0,
+    "supported": 3,
+    "contradicted": 2,
+    "support_titles": [
+      "Someone Like You",
+      "Splecione Losy (Remastered)",
+      "U2 - With Or Without You (TEEMID Edit)"
+    ],
+    "counter_titles": [
+      "My Heart Will Go On (Love Theme from ＂Titanic＂)",
+      "Tiësto - Adagio For Strings"
+    ]
+  },
+  {
+    "statement": "Melancholijna tonacja buduje głębokie emocje.",
+    "confidence": 60.0,
+    "supported": 3,
+    "contradicted": 2,
+    "support_titles": [
+      "My Heart Will Go On (Love Theme from ＂Titanic＂)",
+      "Someone Like You",
+      "Tiësto - Adagio For Strings"
+    ],
+    "counter_titles": [
+      "Splecione Losy (Remastered)",
+      "U2 - With Or Without You (TEEMID Edit)"
+    ]
+  },
+  {
+    "statement": "Silny element tęsknoty zwiększa emocjonalną więź.",
+    "confidence": 60.0,
+    "supported": 3,
+    "contradicted": 2,
+    "support_titles": [
+      "My Heart Will Go On (Love Theme from ＂Titanic＂)",
+      "Someone Like You",
+      "Tiësto - Adagio For Strings"
+    ],
+    "counter_titles": [
+      "Splecione Losy (Remastered)",
+      "U2 - With Or Without You (TEEMID Edit)"
+    ]
+  },
+  {
+    "statement": "Durowa tonacja wzmacnia poczucie nadziei.",
+    "confidence": 40.0,
+    "supported": 2,
+    "contradicted": 3,
+    "support_titles": [
+      "Splecione Losy (Remastered)",
+      "U2 - With Or Without You (TEEMID Edit)"
+    ],
+    "counter_titles": [
+      "My Heart Will Go On (Love Theme from ＂Titanic＂)",
+      "Someone Like You",
+      "Tiësto - Adagio For Strings"
+    ]
+  },
+  {
+    "statement": "Średnia energia jest umiarkowana — emocje budowane są stopniowo.",
+    "confidence": 20.0,
+    "supported": 1,
+    "contradicted": 4,
+    "support_titles": [
+      "Tiësto - Adagio For Strings"
+    ],
+    "counter_titles": [
+      "My Heart Will Go On (Love Theme from ＂Titanic＂)",
+      "Someone Like You",
+      "Splecione Losy (Remastered)",
+      "U2 - With Or Without You (TEEMID Edit)"
+    ]
+  }
+]

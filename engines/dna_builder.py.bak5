@@ -1,0 +1,67 @@
+from engines.energy_pcm import analyze as energy_analyze
+from engines.bpm_engine import detect_transients
+from engines.spectrum_engine import analyze as spectrum_analyze
+from engines.structure_engine import analyze as structure_analyze
+from engines.pitch_engine import analyze_pitch
+from engines.melody_tracker import analyze as melody_analyze
+
+
+def build(audio_file):
+
+    dna = {
+        "audio": {},
+        "energy": {},
+        "beats": {},
+        "spectrum": {},
+        "pitch": {},
+        "melody": {},
+        "structure": {},
+        "harmony": {},
+        "emotion": {}
+    }
+
+    print("Loading Energy...")
+    energy = energy_analyze(audio_file)
+
+    dna["energy"] = {
+        "frames": len(energy),
+        "min": min(energy),
+        "max": max(energy),
+        "avg": sum(energy) / len(energy)
+    }
+
+    print("Loading Beats...")
+    beats = detect_transients(audio_file)
+
+    dna["beats"] = {
+        "count": len(beats),
+        "first": beats[0] if beats else None,
+        "last": beats[-1] if beats else None
+    }
+
+    print("Loading Spectrum...")
+    dna["spectrum"] = spectrum_analyze(audio_file)
+
+    print("Loading Structure...")
+    dna["structure"] = structure_analyze(audio_file)
+
+    print("Loading Pitch...")
+    dna["pitch"] = analyze_pitch(audio_file)
+
+    print("Loading Melody...")
+    melody = melody_analyze(audio_file)
+
+    dna["melody"] = {
+        "frames": len(melody),
+        "first": melody[0] if melody else None,
+        "last": melody[-1] if melody else None
+    }
+
+    return dna
+
+
+if __name__ == "__main__":
+    import sys
+    from pprint import pprint
+
+    pprint(build(sys.argv[1]))

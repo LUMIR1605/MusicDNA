@@ -1,0 +1,53 @@
+__pycache__/
+*.pyc
+*.pyo
+*.bak
+*.wav
+*.mp3
+*.flac
+*.m4a
+*.aac
+dna/
+reports/
+research/*.json
+.env
+.venv/
+venv/
+
+# Audio
+samples/
+*.mp3
+*.wav
+*.flac
+*.ogg
+*.m4a
+
+# Wyniki analiz
+output/
+dna/
+research/
+production_debug.txt
+
+# Python
+__pycache__/
+*.pyc
+*.bak
+
+# Audio
+samples/
+*.mp3
+*.wav
+*.flac
+*.ogg
+*.m4a
+
+# Wyniki
+output/
+dna/
+research/
+production_debug.txt
+
+# Python
+__pycache__/
+*.pyc
+*.bak

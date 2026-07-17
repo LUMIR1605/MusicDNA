@@ -1,0 +1,1764 @@
+
+==============================
+engines/__init__.py
+==============================
+
+==============================
+engines/beat_strength.py
+==============================
+import sys
+import numpy as np
+
+from core.ffmpeg_engine import load_pcm
+
+SR = 48000
+WINDOW = 1024
+HOP = 512
+
+pcm = load_pcm(sys.argv[1])
+
+energy = []
+
+for i in range(0, len(pcm) - WINDOW, HOP):
+    block = pcm[i:i+WINDOW]
+    energy.append(np.sum(block.astype(np.float64)**2))
+
+energy = np.array(energy)
+
+diff = np.diff(energy)
+
+threshold = diff.mean() + diff.std() * 2
+
+print("=== BEAT STRENGTH ===")
+print()
+
+for i, d in enumerate(diff):
+
+    if d > threshold:
+
+        t = (i * HOP) / SR
+
+        print(f"{t:8.3f}s   {d:14.0f}")
+
+==============================
+engines/bpm_engine.py
+==============================
+import sys
+import numpy as np
+
+from core.ffmpeg_engine import load_pcm
+
+SR = 48000
+WINDOW = 1024
+HOP = 512
+
+
+def detect_transients(path):
+
+    pcm = load_pcm(path)
+
+    energy = []
+
+    for i in range(0, len(pcm) - WINDOW, HOP):
+        block = pcm[i:i + WINDOW]
+        value = np.sum(block.astype(np.float64) ** 2)
+        energy.append(value)
+
+    energy = np.array(energy)
+
+    diff = np.diff(energy)
+
+    threshold = diff.mean() + diff.std() * 2
+
+    transients = []
+
+    for i, d in enumerate(diff):
+        if d > threshold:
+            t = (i * HOP) / SR
+            transients.append(t)
+
+    merged = []
+
+    for t in transients:
+
+        if not merged:
+            merged.append(t)
+            continue
+
+        if t - merged[-1] > 0.05:
+            merged.append(t)
+
+    print("=== BEAT ENGINE v2 ===")
+    print()
+
+    print("Transjenty surowe :", len(transients))
+    print("Po scaleniu       :", len(merged))
+    print()
+
+    for t in merged[:50]:
+        print(f"{t:.3f}s")
+
+    return merged
+
+
+if __name__ == "__main__":
+    detect_transients(sys.argv[1])
+
+==============================
+engines/chord_engine.py
+==============================
+
+==============================
+engines/discovery_engine.py
+==============================
+import json
+from pathlib import Path
+from collections import Counter
+
+DB = Path.home() / "music_dna" / "knowledge.json"
+
+def analyze():
+
+    print("=== DISCOVERY ENGINE v1 ===")
+    print()
+
+    if not DB.exists():
+        print("Brak knowledge.json")
+        return
+
+    songs = json.loads(DB.read_text())
+
+    print(f"Przeanalizowanych utworów: {len(songs)}")
+    print()
+
+    modes = Counter()
+    emotions = Counter()
+    rules = Counter()
+
+    for song in songs:
+
+        harmony = song.get("harmony", {})
+        if harmony.get("mode"):
+            modes[harmony["mode"]] += 1
+
+        for emotion in song.get("emotion", {}).get("labels", []):
+            emotions[emotion] += 1
+
+        for rule in song.get("rules", []):
+            rules[rule] += 1
+
+    print("=== TONACJE ===")
+    for k, v in modes.most_common():
+        print(f"{k}: {v}")
+
+    print()
+    print("=== EMOCJE ===")
+    for k, v in emotions.most_common():
+        print(f"{k}: {v}")
+
+    print()
+    print("=== REGUŁY ===")
+    for k, v in rules.most_common():
+        print(f"{k}: {v}")
+
+if __name__ == "__main__":
+    analyze()
+
+==============================
+engines/dna_builder.py
+==============================
+from engines.energy_pcm import analyze as energy_analyze
+from engines.bpm_engine import detect_transients
+from engines.spectrum_engine import analyze as spectrum_analyze
+from engines.structure_engine import analyze as structure_analyze
+from engines.pitch_engine import analyze_pitch
+from engines.melody_tracker import analyze as melody_analyze
+from engines.harmony_engine import analyze as harmony_analyze
+from engines.emotion_engine import analyze as emotion_analyze
+from engines.rules_engine import analyze as rules_analyze
+from engines.knowledge_engine import analyze as knowledge_analyze
+from engines.emotion_journey_engine import analyze as journey_analyze
+from engines.emotion_curve_engine import analyze as curve_analyze
+
+
+def build(audio_file):
+
+    dna = {
+        "audio": {},
+        "energy": {},
+        "beats": {},
+        "spectrum": {},
+        "pitch": {},
+        "melody": {},
+        "structure": {},
+        "harmony": {},
+        "emotion": {},
+        "journey": {},
+        "curve": {},
+        "rules": {},
+    }
+
+    print("Loading Energy...")
+    energy = energy_analyze(audio_file)
+
+    dna["energy"] = {
+        "frames": len(energy),
+        "min": min(energy),
+        "max": max(energy),
+        "avg": sum(energy) / len(energy)
+    }
+
+    print("Loading Beats...")
+    beats = detect_transients(audio_file)
+
+    dna["beats"] = {
+        "count": len(beats),
+        "first": beats[0] if beats else None,
+        "last": beats[-1] if beats else None
+    }
+
+    print("Loading Spectrum...")
+    dna["spectrum"] = spectrum_analyze(audio_file)
+
+    print("Loading Structure...")
+    dna["structure"] = structure_analyze(audio_file)
+
+    print("Loading Pitch...")
+    dna["pitch"] = analyze_pitch(audio_file)
+
+    print("Loading Melody...")
+    melody = melody_analyze(audio_file)
+
+    dna["melody"] = {
+        "frames": len(melody),
+        "first": melody[0] if melody else None,
+        "last": melody[-1] if melody else None
+    }
+
+    print("Loading Harmony...")
+    dna["harmony"] = harmony_analyze(audio_file)
+
+    print("Loading Emotion...")
+    dna["emotion"] = emotion_analyze(dna)
+
+    print("Loading Emotion Journey...")
+    dna["journey"] = journey_analyze(dna)
+
+    print("Loading Emotion Curve...")
+    dna["curve"] = curve_analyze(dna)
+
+    print("Loading Rules...")
+    dna["rules"] = rules_analyze(dna)
+
+    print("Loading Knowledge...")
+    knowledge_analyze(audio_file, dna)
+
+    return dna
+
+
+if __name__ == "__main__":
+    import sys
+    from pprint import pprint
+
+    pprint(build(sys.argv[1]))
+
+==============================
+engines/emotion_curve_engine.py
+==============================
+import math
+
+def analyze(dna):
+
+    print("=== EMOTION CURVE ENGINE v1 ===")
+    print()
+
+    curve = []
+
+    energy = dna.get("energy", {})
+    structure = dna.get("structure", [])
+
+    avg = energy.get("avg", 0)
+
+    for s in structure:
+
+        value = 40
+
+        if s["type"] == "INTRO":
+            value -= 15
+
+        elif s["type"] == "VERSE":
+            value += 0
+
+        elif s["type"] == "BUILD":
+            value += 25
+
+        elif s["type"] == "CHORUS":
+            value += 40
+
+        if avg > 3500:
+            value += 10
+
+        value = max(0, min(100, value))
+
+        curve.append({
+            "start": s["start"],
+            "end": s["end"],
+            "score": value
+        })
+
+    for c in curve:
+
+        bar = "█" * (c["score"] // 5)
+
+        print(
+            f'{c["start"]:6.1f}s {c["score"]:3d} {bar}'
+        )
+
+    return curve
+
+
+if __name__ == "__main__":
+    print("Emotion Curve działa jako moduł dna_builder.")
+
+==============================
+engines/emotion_engine.py
+==============================
+import sys
+
+
+LABELS = [
+    "Calm",
+    "Hope",
+    "Longing",
+    "Dark",
+    "Epic",
+    "Power"
+]
+
+
+def analyze(dna):
+
+    energy = dna.get("energy", {})
+    pitch = dna.get("pitch", {})
+    beats = dna.get("beats", {})
+    harmony = dna.get("harmony", {})
+
+    score = {k: 0.0 for k in LABELS}
+
+    avg_energy = float(energy.get("avg", 0))
+    beat_count = int(beats.get("count", 0))
+    avg_pitch = float(pitch.get("avg", 0))
+    mode = harmony.get("mode", "major")
+
+    if avg_energy > 5000:
+        score["Power"] += 2
+        score["Epic"] += 1
+    elif avg_energy > 2500:
+        score["Hope"] += 1
+    else:
+        score["Calm"] += 2
+
+    if beat_count > 220:
+        score["Power"] += 1
+        score["Epic"] += 1
+    else:
+        score["Calm"] += 1
+
+    if avg_pitch > 350:
+        score["Hope"] += 1
+    elif avg_pitch < 180:
+        score["Dark"] += 1
+        score["Longing"] += 1
+
+    if mode == "minor":
+        score["Dark"] += 2
+        score["Longing"] += 2
+    else:
+        score["Hope"] += 2
+
+    result = sorted(
+        score.items(),
+        key=lambda x: x[1],
+        reverse=True
+    )
+
+    emotions = [x[0] for x in result if x[1] > 0][:3]
+
+    print("=== EMOTION ENGINE v1 ===")
+    print()
+
+    for e in emotions:
+        print(e)
+
+    return {
+        "labels": emotions,
+        "scores": score
+    }
+
+
+if __name__ == "__main__":
+    print("Emotion Engine działa jako moduł dna_builder.")
+
+==============================
+engines/emotion_journey_engine.py
+==============================
+import sys
+
+def analyze(dna):
+
+    print("=== EMOTION JOURNEY ENGINE v1 ===")
+    print()
+
+    journey = []
+
+    structure = dna.get("structure", [])
+    energy = dna.get("energy", {})
+    harmony = dna.get("harmony", {})
+    emotions = dna.get("emotion", {}).get("labels", [])
+
+    avg_energy = energy.get("avg", 0)
+    mode = harmony.get("mode")
+
+    for section in structure:
+
+        part = section["type"]
+
+        if part == "INTRO":
+            state = "Reflection"
+
+        elif part == "VERSE":
+            if "Longing" in emotions:
+                state = "Longing"
+            else:
+                state = "Story"
+
+        elif part == "BUILD":
+            state = "Tension"
+
+        elif part == "CHORUS":
+            if avg_energy > 3500:
+                state = "Release"
+            else:
+                state = "Hope"
+
+        else:
+            state = "Unknown"
+
+        journey.append({
+            "start": section["start"],
+            "end": section["end"],
+            "emotion": state
+        })
+
+    print("Emotional Journey")
+    print()
+
+    for j in journey:
+        print(
+            f'{j["start"]:6.1f}s - {j["end"]:6.1f}s   {j["emotion"]}'
+        )
+
+    return journey
+
+
+if __name__ == "__main__":
+    print("Emotion Journey działa jako moduł dna_builder.")
+
+==============================
+engines/energy_engine.py
+==============================
+import subprocess
+import re
+import sys
+
+def analyze_energy(audio_file):
+    cmd = [
+        "ffmpeg",
+        "-hide_banner",
+        "-i", audio_file,
+        "-af", "astats=metadata=1:reset=0.1",
+        "-f", "null",
+        "-"
+    ]
+
+    result = subprocess.run(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    )
+
+    rms = []
+
+    for line in result.stderr.splitlines():
+        if "RMS level dB:" in line:
+            m = re.search(r'RMS level dB:\s*(-?\d+\.?\d*)', line)
+            if m:
+                rms.append(float(m.group(1)))
+
+    print("=== ENERGY ENGINE ===")
+    print(f"Próbek RMS: {len(rms)}")
+
+    if rms:
+        print(f"Min : {min(rms):.2f} dB")
+        print(f"Max : {max(rms):.2f} dB")
+        print(f"Avg : {sum(rms)/len(rms):.2f} dB")
+
+        print("\nPierwszych 20 próbek:")
+        for x in rms[:20]:
+            print(x)
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("python energy_engine.py <plik>")
+        sys.exit(1)
+
+    analyze_energy(sys.argv[1])
+
+==============================
+engines/energy_pcm.py
+==============================
+import math
+import sys
+import numpy as np
+
+from core.ffmpeg_engine import load_pcm
+
+SR = 48000
+WINDOW = int(SR * 0.1)
+
+
+def rms(block):
+    if len(block) == 0:
+        return 0.0
+
+    return math.sqrt(np.mean(block.astype(np.float64) ** 2))
+
+
+def analyze(path):
+
+    pcm = load_pcm(path)
+
+    values = []
+
+    for i in range(0, len(pcm), WINDOW):
+
+        block = pcm[i:i + WINDOW]
+
+        if len(block) < WINDOW:
+            break
+
+        values.append(rms(block))
+
+    print("=== ENERGY PCM ===")
+    print("Próbek:", len(values))
+
+    if values:
+        print("Min :", round(min(values), 2))
+        print("Max :", round(max(values), 2))
+        print("Avg :", round(sum(values) / len(values), 2))
+
+    return values
+
+
+if __name__ == "__main__":
+    analyze(sys.argv[1])
+
+==============================
+engines/energy_plot.py
+==============================
+import matplotlib.pyplot as plt
+from energy_pcm import analyze
+
+values = analyze("/storage/emulated/0/Download/Whitney Houston - I Will Always Love You (Official 4K Video).mp3")
+
+plt.figure(figsize=(12,4))
+plt.plot(values)
+plt.title("Energy Curve")
+plt.xlabel("Window (100 ms)")
+plt.ylabel("RMS")
+plt.grid(True)
+plt.savefig("/storage/emulated/0/Download/energy_curve.png", dpi=200)
+
+print("✓ Zapisano:")
+print("/storage/emulated/0/Download/energy_curve.png")
+
+==============================
+engines/feedback_engine.py
+==============================
+
+==============================
+engines/generator_engine.py
+==============================
+"""
+engines/feedback_engine.py
+
+Porównanie dwóch utworów w formacie Music DNA.
+Zwraca szczegółowe metryki podobieństwa i rekomendacje.
+
+Użycie:
+    from engines.feedback_engine import compare
+    result = compare(track_a, track_b)
+
+Uruchomienie:
+    python -m engines.feedback_engine
+"""
+
+import statistics
+from typing import Any
+
+DNA = dict[str, Any]
+FeatureResult = dict[str, Any]
+
+
+def _clamp(value: float, lo: float = 0.0, hi: float = 100.0) -> int:
+    return round(max(lo, min(hi, value)))
+
+
+def _section_durations(track: DNA, section_type: str) -> list[float]:
+    return [
+        s["end"] - s["start"]
+        for s in track["structure"]
+        if s["type"] == section_type
+    ]
+
+
+def _mean(values: list[float]) -> float | None:
+    return statistics.mean(values) if values else None
+
+
+def _first_start(track: DNA, section_type: str) -> float | None:
+    for s in track["structure"]:
+        if s["type"] == section_type:
+            return s["start"]
+    return None
+
+
+def _section_sequence(track: DNA) -> list[str]:
+    return [s["type"] for s in track["structure"]]
+
+
+def _sequence_similarity(seq_a: list[str], seq_b: list[str]) -> float:
+    if not seq_a and not seq_b:
+        return 100.0
+    if not seq_a or not seq_b:
+        return 0.0
+    n, m = len(seq_a), len(seq_b)
+    dp = [[0] * (m + 1) for _ in range(n + 1)]
+    for i in range(1, n + 1):
+        for j in range(1, m + 1):
+            if seq_a[i - 1] == seq_b[j - 1]:
+                dp[i][j] = dp[i - 1][j - 1] + 1
+            else:
+                dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
+    lcs = dp[n][m]
+    return lcs / max(n, m) * 100.0
+
+
+def _label_overlap(labels_a: list[str], labels_b: list[str]) -> float:
+    set_a, set_b = set(labels_a), set(labels_b)
+    if not set_a and not set_b:
+        return 100.0
+    if not set_a or not set_b:
+        return 0.0
+    overlap = len(set_a & set_b)
+    union = len(set_a | set_b)
+    return overlap / union * 100.0
+
+
+def _compare_energy(a: DNA, b: DNA) -> FeatureResult:
+    avg_a = a["energy"]["avg"]
+    avg_b = b["energy"]["avg"]
+    diff = avg_b - avg_a
+    pct_diff = abs(diff) / max(avg_b, 1e-9) * 100
+    sim = _clamp(100.0 - pct_diff * 2)
+    if abs(diff) < 0.02:
+        rec = "Energia jest dobrze dopasowana."
+    elif diff > 0:
+        rec = f"Zwiększ średnią energię o około {pct_diff:.0f}% (cel: {avg_b:.3f})."
+    else:
+        rec = f"Zmniejsz średnią energię o około {pct_diff:.0f}% (cel: {avg_b:.3f})."
+    return {
+        "similarity": sim,
+        "difference": f"generated={avg_a:.3f}, target={avg_b:.3f}, delta={diff:+.3f}",
+        "recommendation": rec,
+    }
+
+
+def _compare_key(a: DNA, b: DNA) -> FeatureResult:
+    key_a = a["harmony"]["key"]
+    mode_a = a["harmony"]["mode"]
+    key_b = b["harmony"]["key"]
+    mode_b = b["harmony"]["mode"]
+    key_match = key_a == key_b
+    mode_match = mode_a == mode_b
+    if key_match and mode_match:
+        sim = 100
+        rec = "Tonacja i tryb są identyczne."
+    elif mode_match:
+        sim = 60
+        rec = f"Tryb ({mode_a}) się zgadza, ale klucz różni się: generated={key_a}, target={key_b}."
+    elif key_match:
+        sim = 50
+        rec = f"Klucz ({key_a}) się zgadza, ale tryb różni się: generated={mode_a}, target={mode_b}."
+    else:
+        sim = 10
+        rec = f"Zmień tonację z {key_a} {mode_a} na {key_b} {mode_b}."
+    return {
+        "similarity": sim,
+        "difference": f"generated={key_a} {mode_a}, target={key_b} {mode_b}",
+        "recommendation": rec,
+    }
+
+
+def _compare_emotions(a: DNA, b: DNA) -> FeatureResult:
+    labels_a = a["emotion"]["labels"]
+    labels_b = b["emotion"]["labels"]
+    sim = _clamp(_label_overlap(labels_a, labels_b))
+    only_b = sorted(set(labels_b) - set(labels_a))
+    only_a = sorted(set(labels_a) - set(labels_b))
+    parts: list[str] = []
+    if only_b:
+        parts.append(f"Brakuje emocji: {', '.join(only_b)}.")
+    if only_a:
+        parts.append(f"Nadmiarowe emocje: {', '.join(only_a)}.")
+    rec = " ".join(parts) if parts else "Zestaw emocji jest dobrze dopasowany."
+    return {
+        "similarity": sim,
+        "difference": f"generated={labels_a}, target={labels_b}",
+        "recommendation": rec,
+    }
+
+
+def _compare_journey(a: DNA, b: DNA) -> FeatureResult:
+    journey_a: list[str] = a.get("journey", [])
+    journey_b: list[str] = b.get("journey", [])
+    sim = _clamp(_sequence_similarity(journey_a, journey_b))
+    if sim >= 90:
+        rec = "Przebieg emocji jest bardzo zbliżony."
+    elif sim >= 60:
+        rec = f"Przebieg emocji częściowo się zgadza. Cel: {' → '.join(journey_b)}."
+    else:
+        rec = f"Przebieg emocji znacznie się różni. Zmień sekwencję na: {' → '.join(journey_b)}."
+    return {
+        "similarity": sim,
+        "difference": (
+            f"generated=[{', '.join(journey_a)}], "
+            f"target=[{', '.join(journey_b)}]"
+        ),
+        "recommendation": rec,
+    }
+
+
+def _compare_structure(a: DNA, b: DNA) -> FeatureResult:
+    seq_a = _section_sequence(a)
+    seq_b = _section_sequence(b)
+    sim = _clamp(_sequence_similarity(seq_a, seq_b))
+    if sim >= 90:
+        rec = "Układ sekcji jest bardzo zbliżony."
+    elif sim >= 60:
+        rec = f"Struktura częściowo zgodna. Docelowy układ: {' → '.join(seq_b)}."
+    else:
+        rec = f"Struktura znacznie się różni. Przebuduj układ na: {' → '.join(seq_b)}."
+    return {
+        "similarity": sim,
+        "difference": (
+            f"generated={' → '.join(seq_a)}, "
+            f"target={' → '.join(seq_b)}"
+        ),
+        "recommendation": rec,
+    }
+
+
+def _compare_section_duration(
+    a: DNA,
+    b: DNA,
+    section_type: str,
+) -> FeatureResult:
+    durs_a = _section_durations(a, section_type)
+    durs_b = _section_durations(b, section_type)
+    mean_a = _mean(durs_a)
+    mean_b = _mean(durs_b)
+    if mean_a is None and mean_b is None:
+        return {
+            "similarity": 100,
+            "difference": f"Brak sekcji {section_type} w obu utworach.",
+            "recommendation": f"Brak sekcji {section_type} — bez rekomendacji.",
+        }
+    if mean_a is None:
+        return {
+            "similarity": 0,
+            "difference": f"Brak sekcji {section_type} w generated.",
+            "recommendation": f"Dodaj sekcję {section_type} (cel: {mean_b:.1f}s).",
+        }
+    if mean_b is None:
+        return {
+            "similarity": 0,
+            "difference": f"Brak sekcji {section_type} w target.",
+            "recommendation": f"Usuń lub skróć {section_type} — nie występuje w docelowym.",
+        }
+    diff = mean_b - mean_a
+    pct_diff = abs(diff) / max(mean_b, 1e-9) * 100
+    sim = _clamp(100.0 - pct_diff * 1.5)
+    if abs(diff) < 1.0:
+        rec = f"Długość {section_type} jest dobrze dopasowana ({mean_a:.1f}s)."
+    elif diff > 0:
+        rec = (
+            f"Wydłuż {section_type} o około {diff:.1f}s "
+            f"(generated={mean_a:.1f}s, target={mean_b:.1f}s)."
+        )
+    else:
+        rec = (
+            f"Skróć {section_type} o około {abs(diff):.1f}s "
+            f"(generated={mean_a:.1f}s, target={mean_b:.1f}s)."
+        )
+    return {
+        "similarity": sim,
+        "difference": (
+            f"generated={mean_a:.2f}s, target={mean_b:.2f}s, delta={diff:+.2f}s"
+        ),
+        "recommendation": rec,
+    }
+
+
+def _compare_beats(a: DNA, b: DNA) -> FeatureResult:
+    cnt_a = a["beats"]["count"]
+    cnt_b = b["beats"]["count"]
+    diff = cnt_b - cnt_a
+    pct_diff = abs(diff) / max(cnt_b, 1) * 100
+    sim = _clamp(100.0 - pct_diff * 1.5)
+    if abs(diff) <= 2:
+        rec = f"Liczba beatów jest dobrze dopasowana ({cnt_a})."
+    elif diff > 0:
+        rec = f"Zwiększ liczbę beatów o {diff} (generated={cnt_a}, target={cnt_b})."
+    else:
+        rec = f"Zmniejsz liczbę beatów o {abs(diff)} (generated={cnt_a}, target={cnt_b})."
+    return {
+        "similarity": sim,
+        "difference": f"generated={cnt_a}, target={cnt_b}, delta={diff:+d}",
+        "recommendation": rec,
+    }
+
+
+
+==============================
+engines/harmony_engine.py
+==============================
+import sys
+import numpy as np
+
+from core.ffmpeg_engine import load_pcm
+
+SR = 48000
+WINDOW = 4096
+HOP = 2048
+
+NOTE_NAMES = [
+    "C", "C#", "D", "D#", "E", "F",
+    "F#", "G", "G#", "A", "A#", "B"
+]
+
+
+def analyze(path):
+
+    pcm = load_pcm(path)
+
+    chroma = np.zeros(12, dtype=np.float64)
+
+    for i in range(0, len(pcm) - WINDOW, HOP):
+
+        block = pcm[i:i + WINDOW]
+
+        block = block * np.hanning(len(block))
+
+        fft = np.fft.rfft(block)
+
+        amp = np.abs(fft)
+
+        freq = np.fft.rfftfreq(len(block), 1 / SR)
+
+        for f, a in zip(freq, amp):
+
+            if f < 40 or f > 5000:
+                continue
+
+            midi = int(round(69 + 12 * np.log2(f / 440.0)))
+
+            chroma[midi % 12] += a
+
+    idx = int(np.argmax(chroma))
+
+    key = NOTE_NAMES[idx]
+
+    total = float(np.sum(chroma))
+
+    confidence = 0.0
+
+    if total > 0:
+        confidence = float(chroma[idx] / total)
+
+    mode = "major"
+
+    if chroma[(idx + 3) % 12] > chroma[(idx + 4) % 12]:
+        mode = "minor"
+
+    print("=== HARMONY ENGINE v1 ===")
+    print()
+    print("Key        :", key)
+    print("Mode       :", mode)
+    print("Confidence :", round(confidence, 3))
+
+    return {
+        "key": key,
+        "mode": mode,
+        "confidence": confidence,
+        "chroma": chroma.tolist()
+    }
+
+
+if __name__ == "__main__":
+    analyze(sys.argv[1])
+
+==============================
+engines/hypothesis_engine.py
+==============================
+import json
+from pathlib import Path
+from collections import Counter
+
+DB = Path.home() / "music_dna" / "knowledge.json"
+
+def analyze():
+
+    print("=== HYPOTHESIS ENGINE v2 ===")
+    print()
+
+    if not DB.exists():
+        print("Brak bazy wiedzy.")
+        return []
+
+    songs = json.loads(DB.read_text())
+
+    modes = Counter()
+    emotions = Counter()
+    pairs = Counter()
+
+    for song in songs:
+
+        mode = song.get("harmony", {}).get("mode")
+        if mode:
+            modes[mode] += 1
+
+        labels = song.get("emotion", {}).get("labels", [])
+
+        for e in labels:
+            emotions[e] += 1
+            if mode:
+                pairs[(mode, e)] += 1
+
+    print("=== TONACJE ===")
+    for k,v in modes.items():
+        print(k, v)
+
+    print()
+    print("=== EMOCJE ===")
+    for k,v in emotions.items():
+        print(k, v)
+
+    print()
+    print("=== ZALEŻNOŚCI ===")
+
+    for (mode, emotion), count in pairs.most_common():
+        print(f"{mode:6} -> {emotion:10} : {count}")
+
+    return pairs
+
+if __name__ == "__main__":
+    analyze()
+
+==============================
+engines/knowledge_engine.py
+==============================
+import json
+from pathlib import Path
+
+DB = Path.home() / "music_dna" / "knowledge.json"
+
+def analyze(title, dna):
+
+    print("=== KNOWLEDGE ENGINE v1 ===")
+    print()
+
+    if DB.exists():
+        database = json.loads(DB.read_text())
+    else:
+        database = []
+
+    entry = {
+        "title": title,
+        **dna
+    }
+
+    database = [x for x in database if Path(x.get("title","")).name != Path(title).name]
+    database.append(entry)
+
+    DB.write_text(json.dumps(database, indent=2))
+
+    print(f"Zapisano utworów: {len(database)}")
+
+    return database
+
+
+if __name__ == "__main__":
+    print("Knowledge Engine działa jako moduł dna_builder.")
+
+==============================
+engines/lead_engine.py
+==============================
+import sys
+import numpy as np
+
+from core.ffmpeg_engine import load_pcm
+
+SR = 48000
+WINDOW = 4096
+HOP = 2048
+
+
+def analyze_lead(path):
+
+    pcm = load_pcm(path)
+
+    print("=== LEAD ENGINE v1 ===")
+    print()
+
+    previous = None
+    stable = 0
+
+    for i in range(0, len(pcm) - WINDOW, HOP):
+
+        block = pcm[i:i + WINDOW]
+        block *= np.hanning(len(block))
+
+        fft = np.fft.rfft(block)
+        amp = np.abs(fft)
+
+        idx = np.argmax(amp)
+        freq = idx * SR / WINDOW
+
+        if not (80 <= freq <= 2000):
+            continue
+
+        if previous is not None:
+
+            if abs(freq - previous) < 15:
+                stable += 1
+            else:
+                stable = 0
+
+        previous = freq
+
+        if stable >= 5:
+
+            print(f"{i/SR:8.3f}s   {freq:8.2f} Hz   STABLE")
+
+==============================
+engines/melody_candidates.py
+==============================
+import sys
+import numpy as np
+
+from core.ffmpeg_engine import load_pcm
+
+SR = 48000
+WINDOW = 4096
+HOP = 2048
+TOP = 8
+
+
+def analyze(path):
+
+    pcm = load_pcm(path)
+
+    print("=== MELODY CANDIDATES v1 ===")
+    print()
+
+    for pos in range(0, len(pcm) - WINDOW, HOP):
+
+        block = pcm[pos:pos + WINDOW]
+        block = block * np.hanning(len(block))
+
+        fft = np.fft.rfft(block)
+        amp = np.abs(fft)
+        freq = np.fft.rfftfreq(len(block), 1 / SR)
+
+        idx = np.argsort(amp)[-TOP:][::-1]
+
+        print(f"\n{pos/SR:8.3f}s")
+
+        for i in idx:
+            if 80 <= freq[i] <= 2000:
+                print(f"    {freq[i]:8.2f} Hz    {amp[i]:12.0f}")
+
+
+if __name__ == "__main__":
+    analyze(sys.argv[1])
+
+==============================
+engines/melody_tracker.py
+==============================
+import sys
+import numpy as np
+
+from core.ffmpeg_engine import load_pcm
+
+SR = 48000
+WINDOW = 4096
+HOP = 2048
+
+def analyze(path):
+    pcm = load_pcm(path)
+
+    notes = []
+    last = None
+
+    for i in range(0, len(pcm) - WINDOW, HOP):
+        block = pcm[i:i+WINDOW] * np.hanning(WINDOW)
+
+        fft = np.fft.rfft(block)
+        amp = np.abs(fft)
+
+        idx = np.argmax(amp)
+        freq = idx * SR / WINDOW
+
+        if not (80 <= freq <= 2000):
+            continue
+
+        if last is None:
+            move = "START"
+        else:
+            d = freq - last
+            if abs(d) < 8:
+                move = "→"
+            elif d > 0:
+                move = "↑"
+            else:
+                move = "↓"
+
+        notes.append({
+            "time": i / SR,
+            "freq": float(freq),
+            "move": move
+        })
+
+        last = freq
+
+    print("=== MELODY TRACKER v2 ===")
+    print("Próbek:", len(notes))
+
+    return notes
+
+if __name__ == "__main__":
+    data = analyze(sys.argv[1])
+
+    print("Pierwsze 20 nut:")
+    for n in data[:20]:
+        print(f"{n['time']:7.3f}s  {n['freq']:8.2f} Hz  {n['move']}")
+
+==============================
+engines/music_dna.py
+==============================
+
+==============================
+engines/narrative_engine.py
+==============================
+import subprocess
+import sys
+
+def detect_changes(audio_file):
+    cmd = [
+        "aubioonset",
+        "-i",
+        audio_file
+    ]
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr)
+
+    points = []
+
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+
+        try:
+            points.append(float(line))
+        except ValueError:
+            pass
+
+    print("=== NARRATIVE ENGINE ===")
+    print(f"Wykryto {len(points)} punktów zmian\n")
+
+    print("Pierwsze 30 zmian:")
+
+    for p in points[:30]:
+        print(f"{p:.3f} s")
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("python narrative_engine.py <plik>")
+        sys.exit(1)
+
+    detect_changes(sys.argv[1])
+
+==============================
+engines/pattern_engine.py
+==============================
+
+==============================
+engines/pitch_engine.py
+==============================
+import sys
+import numpy as np
+
+from core.ffmpeg_engine import load_pcm
+
+SR = 48000
+WINDOW = 4096
+HOP = 2048
+
+
+def analyze_pitch(path):
+
+    pcm = load_pcm(path)
+
+    pitches = []
+
+    print("=== PITCH ENGINE v2 ===")
+    print()
+
+    for i in range(0, len(pcm) - WINDOW, HOP):
+
+        block = pcm[i:i + WINDOW]
+        block = block * np.hanning(len(block))
+
+        fft = np.fft.rfft(block)
+        amp = np.abs(fft)
+
+        idx = np.argmax(amp)
+        freq = idx * SR / WINDOW
+
+        if 50 <= freq <= 2000:
+            pitches.append(freq)
+
+    print("Próbek:", len(pitches))
+
+    if pitches:
+        print("Min :", round(min(pitches), 2))
+        print("Max :", round(max(pitches), 2))
+        print("Avg :", round(sum(pitches) / len(pitches), 2))
+
+    return {
+        "frames": len(pitches),
+        "min": min(pitches) if pitches else 0,
+        "max": max(pitches) if pitches else 0,
+        "avg": sum(pitches) / len(pitches) if pitches else 0,
+        "values": pitches[:200]
+    }
+
+
+if __name__ == "__main__":
+    analyze_pitch(sys.argv[1])
+
+==============================
+engines/prompt_engine.py
+==============================
+from smooth_energy import smooth
+
+mx=max(smooth)
+
+parts=[]
+
+for i,v in enumerate(smooth):
+
+    p=v/mx
+    t=i*5
+
+    if p<0.20:
+        mood="very soft"
+
+    elif p<0.40:
+        mood="soft"
+
+    elif p<0.60:
+        mood="building"
+
+    elif p<0.80:
+        mood="powerful"
+
+    else:
+        mood="climax"
+
+    parts.append(f"{t:>3}s-{t+5:>3}s : {mood}")
+
+print()
+print("===== MUSIC STORY =====")
+print()
+
+for x in parts:
+    print(x)
+
+==============================
+engines/rhythm_analyzer.py
+==============================
+import statistics
+from engines.bpm_engine import get_beats
+import sys
+
+def analyze_rhythm(audio_file):
+    beats = get_beats(audio_file)
+
+    if len(beats) < 2:
+        print("Za mało beatów.")
+        return
+
+    intervals = [
+        beats[i+1] - beats[i]
+        for i in range(len(beats)-1)
+    ]
+
+    avg = statistics.mean(intervals)
+    minimum = min(intervals)
+    maximum = max(intervals)
+    deviation = statistics.pstdev(intervals)
+
+    print("=== RHYTHM ANALYZER ===")
+    print(f"Liczba beatów      : {len(beats)}")
+    print(f"Średni odstęp      : {avg:.4f} s")
+    print(f"Najszybszy beat    : {minimum:.4f} s")
+    print(f"Najwolniejszy beat : {maximum:.4f} s")
+    print(f"Odchylenie         : {deviation:.5f}")
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("python rhythm_analyzer.py <plik>")
+        sys.exit(1)
+
+    analyze_rhythm(sys.argv[1])
+
+==============================
+engines/rules_engine.py
+==============================
+import sys
+
+
+def analyze(dna):
+
+    print("=== RULES ENGINE v1 ===")
+    print()
+
+    rules = []
+
+    harmony = dna.get("harmony", {})
+    emotion = dna.get("emotion", {})
+    energy = dna.get("energy", {})
+    vocal = dna.get("vocal", {})
+    structure = dna.get("structure", {})
+
+    if harmony.get("mode") == "minor":
+        rules.append(
+            "Melancholijna tonacja buduje głębokie emocje."
+        )
+
+    if harmony.get("mode") == "major":
+        rules.append(
+            "Durowa tonacja wzmacnia poczucie nadziei."
+        )
+
+    labels = emotion.get("labels", [])
+
+    if "Hope" in labels:
+        rules.append(
+            "Utwór prowadzi słuchacza w kierunku nadziei."
+        )
+
+    if "Longing" in labels:
+        rules.append(
+            "Silny element tęsknoty zwiększa emocjonalną więź."
+        )
+
+    if "Power" in labels:
+        rules.append(
+            "Kulminacja opiera się na sile wykonania."
+        )
+
+    if energy.get("avg", 0) < 3500:
+        rules.append(
+            "Średnia energia jest umiarkowana — emocje budowane są stopniowo."
+        )
+
+    if vocal.get("max", 0) > 10000:
+        rules.append(
+            "Wokal posiada bardzo mocny potencjał kulminacyjny."
+        )
+
+    sections = structure
+
+    if sections:
+        first = sections[0]
+
+        if first.get("type") == "INTRO":
+            duration = first["end"] - first["start"]
+
+            if duration > 30:
+                rules.append(
+                    "Długie intro opóźnia emocjonalną nagrodę."
+                )
+
+    print("Odkryte reguły:")
+    print()
+
+    for i, rule in enumerate(rules, 1):
+        print(f"{i}. {rule}")
+
+    return rules
+
+
+if __name__ == "__main__":
+
+    print(
+        "Rules Engine działa jako moduł dna_builder."
+    )
+
+==============================
+engines/smooth_energy.py
+==============================
+from energy_pcm import analyze
+
+values = analyze("/storage/emulated/0/Download/Whitney Houston - I Will Always Love You (Official 4K Video).mp3")
+
+WINDOW = 50
+
+smooth = []
+
+for i in range(0, len(values), WINDOW):
+    chunk = values[i:i+WINDOW]
+    if chunk:
+        smooth.append(sum(chunk)/len(chunk))
+
+print("\n=== SMOOTH ENERGY ===\n")
+print("Punktów:", len(smooth))
+print()
+
+for i,v in enumerate(smooth):
+    sec = i * WINDOW * 0.1
+    print(f"{sec:6.1f}s   {v:8.1f}")
+
+
+==============================
+engines/spectrum_engine.py
+==============================
+import sys
+import numpy as np
+
+from core.ffmpeg_engine import load_pcm
+
+SR = 48000
+WINDOW = SR * 5
+
+
+def analyze(path):
+
+    pcm = load_pcm(path)
+
+    block = pcm[:WINDOW]
+
+    if len(block) < WINDOW:
+        raise RuntimeError("Plik jest za krótki.")
+
+    block = block * np.hanning(len(block))
+
+    fft = np.fft.rfft(block)
+    freq = np.fft.rfftfreq(len(block), 1 / SR)
+    amp = np.abs(fft)
+
+    idx = np.argsort(amp)[-20:][::-1]
+
+    print("=== SPECTRUM ENGINE ===")
+    print()
+
+    for i in idx:
+        print(f"{freq[i]:8.1f} Hz   {amp[i]:12.1f}")
+
+    peaks = []
+
+    for i in idx:
+        peaks.append({
+            "freq": float(freq[i]),
+            "amp": float(amp[i])
+        })
+
+    return {
+        "peaks": peaks
+    }
+
+
+if __name__ == "__main__":
+    analyze(sys.argv[1])
+
+==============================
+engines/spectrum_map.py
+==============================
+import subprocess
+import numpy as np
+import sys
+
+SR = 48000
+WINDOW = 5
+TOP = 5
+
+cmd = [
+    "ffmpeg",
+    "-i", sys.argv[1],
+    "-f", "s16le",
+    "-acodec", "pcm_s16le",
+    "-ac", "1",
+    "-ar", str(SR),
+    "-"
+]
+
+p = subprocess.Popen(
+    cmd,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.DEVNULL
+)
+
+samples_per_window = SR * WINDOW
+
+print("=== SPECTRUM MAP v2 ===")
+print()
+
+sec = 0
+
+while True:
+
+    raw = p.stdout.read(samples_per_window * 2)
+
+    if len(raw) < samples_per_window * 2:
+        break
+
+    samples = np.frombuffer(raw, dtype=np.int16).astype(np.float32)
+
+    samples *= np.hanning(len(samples))
+
+    fft = np.fft.rfft(samples)
+    amp = np.abs(fft)
+    freq = np.fft.rfftfreq(len(samples), 1 / SR)
+
+    idx = np.argsort(amp)[-TOP:][::-1]
+
+    print(f"{sec:3d}-{sec+WINDOW:3d}s")
+
+    for i in idx:
+        print(f"    {freq[i]:8.1f} Hz   {amp[i]:12.0f}")
+
+    print()
+
+    sec += WINDOW
+
+==============================
+engines/statistics_engine.py
+==============================
+
+==============================
+engines/story_engine.py
+==============================
+from energy_pcm import analyze
+
+values = analyze("/storage/emulated/0/Download/Whitney Houston - I Will Always Love You (Official 4K Video).mp3")
+
+m = max(values)
+
+print("\n=== STORY ENGINE ===\n")
+
+state = "low"
+
+for i,v in enumerate(values):
+
+    p = v/m
+
+    if state=="low" and p>0.30:
+        print(f"▲ START BUILD      {i*0.1:7.1f}s")
+        state="build"
+
+    elif state=="build" and p>0.70:
+        print(f"🔥 CLIMAX          {i*0.1:7.1f}s")
+        state="high"
+
+    elif state=="high" and p<0.40:
+        print(f"▼ RELEASE         {i*0.1:7.1f}s")
+        state="low"
+
+print("\nAnaliza zakończona.")
+
+==============================
+engines/structure_engine.py
+==============================
+import sys
+import numpy as np
+
+from engines.energy_pcm import analyze as energy_analyze
+
+
+SR = 48000
+FRAME_TIME = 0.1
+
+
+def analyze(path):
+
+    print("=== STRUCTURE ENGINE ===")
+    print()
+
+    energy = energy_analyze(path)
+
+    energy = np.array(energy, dtype=float)
+
+    if len(energy) == 0:
+        return []
+
+    smooth = np.convolve(energy, np.ones(25) / 25, mode="same")
+
+    maximum = smooth.max()
+
+    sections = []
+
+    current = None
+    start = 0
+
+    for i, value in enumerate(smooth):
+
+        ratio = value / maximum
+
+        if ratio < 0.20:
+            label = "INTRO"
+
+        elif ratio < 0.45:
+            label = "VERSE"
+
+        elif ratio < 0.70:
+            label = "BUILD"
+
+        else:
+            label = "CHORUS"
+
+        if current is None:
+            current = label
+            start = i
+            continue
+
+        if label != current:
+
+            sections.append({
+                "type": current,
+                "start": start * FRAME_TIME,
+                "end": i * FRAME_TIME
+            })
+
+            current = label
+            start = i
+
+    sections.append({
+        "type": current,
+        "start": start * FRAME_TIME,
+        "end": len(smooth) * FRAME_TIME
+    })
+
+    for s in sections:
+        print(
+            f"{s['start']:7.1f}s - "
+            f"{s['end']:7.1f}s   "
+            f"{s['type']}"
+        )
+
+    return sections
+
+
+if __name__ == "__main__":
+    analyze(sys.argv[1])
+
+==============================
+engines/transient_stats.py
+==============================
+import sys
+import numpy as np
+
+from engines.bpm_engine import detect_transients
+
+transients = detect_transients(sys.argv[1])
+
+intervals = np.diff(transients)
+
+print()
+print("=== TRANSIENT STATS ===")
+print()
+
+print("Liczba:", len(intervals))
+print("Min   :", round(intervals.min(), 4))
+print("Max   :", round(intervals.max(), 4))
+print("Średnia:", round(intervals.mean(), 4))
+print("Mediana:", round(np.median(intervals), 4))
+
+print()
+print("Pierwsze 100 odstępów:")
+
+for x in intervals[:100]:
+    print(round(float(x),4))
+
+==============================
+engines/vocal_engine.py
+==============================
+import sys
+import numpy as np
+
+from core.ffmpeg_engine import load_pcm
+
+SR = 48000
+WINDOW = 4096
+HOP = 2048
+
+
+def analyze(path):
+
+    pcm = load_pcm(path)
+
+    levels = []
+
+    print("=== VOCAL ENGINE v1 ===")
+    print()
+
+    for i in range(0, len(pcm) - WINDOW, HOP):
+
+        block = pcm[i:i + WINDOW]
+
+        rms = np.sqrt(np.mean(block.astype(np.float64) ** 2))
+
+        levels.append(float(rms))
+
+    print(f"Próbek: {len(levels)}")
+    print(f"Min : {min(levels):.2f}")
+    print(f"Max : {max(levels):.2f}")
+    print(f"Avg : {sum(levels)/len(levels):.2f}")
+
+    return {
+        "frames": len(levels),
+        "min": min(levels),
+        "max": max(levels),
+        "avg": sum(levels) / len(levels)
+    }
+
+
+if __name__ == "__main__":
+    analyze(sys.argv[1])

@@ -1,0 +1,350 @@
+[
+  {
+    "time": 0.0,
+    "function": "F001 Create Curiosity"
+  },
+  {
+    "time": 3.2,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 3.8,
+    "function": "F001 Create Curiosity"
+  },
+  {
+    "time": 10.3,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 11.7,
+    "function": "F001 Create Curiosity"
+  },
+  {
+    "time": 13.2,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 14.7,
+    "function": "F001 Create Curiosity"
+  },
+  {
+    "time": 17.3,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 19.4,
+    "function": "F001 Create Curiosity"
+  },
+  {
+    "time": 20.8,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 32.6,
+    "function": "F001 Create Curiosity"
+  },
+  {
+    "time": 38.6,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 46.5,
+    "function": "F001 Create Curiosity"
+  },
+  {
+    "time": 49.7,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 62.6,
+    "function": "F001 Create Curiosity"
+  },
+  {
+    "time": 63.2,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 66.2,
+    "function": "F001 Create Curiosity"
+  },
+  {
+    "time": 66.5,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 76.4,
+    "function": "F001 Create Curiosity"
+  },
+  {
+    "time": 76.5,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 80.3,
+    "function": "F003 Increase Anticipation"
+  },
+  {
+    "time": 82.4,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 83.6,
+    "function": "F003 Increase Anticipation"
+  },
+  {
+    "time": 87.9,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 92.5,
+    "function": "F003 Increase Anticipation"
+  },
+  {
+    "time": 92.7,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 93.5,
+    "function": "F003 Increase Anticipation"
+  },
+  {
+    "time": 99.6,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 104.4,
+    "function": "F001 Create Curiosity"
+  },
+  {
+    "time": 109.7,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 130.8,
+    "function": "F003 Increase Anticipation"
+  },
+  {
+    "time": 131.6,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 137.4,
+    "function": "F003 Increase Anticipation"
+  },
+  {
+    "time": 144.9,
+    "function": "F005 Deliver Reward"
+  },
+  {
+    "time": 145.3,
+    "function": "F003 Increase Anticipation"
+  },
+  {
+    "time": 148.8,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 150.2,
+    "function": "F003 Increase Anticipation"
+  },
+  {
+    "time": 150.3,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 150.8,
+    "function": "F003 Increase Anticipation"
+  },
+  {
+    "time": 155.6,
+    "function": "F005 Deliver Reward"
+  },
+  {
+    "time": 160.1,
+    "function": "F003 Increase Anticipation"
+  },
+  {
+    "time": 182.8,
+    "function": "F005 Deliver Reward"
+  },
+  {
+    "time": 183.9,
+    "function": "F003 Increase Anticipation"
+  },
+  {
+    "time": 184.7,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 185.6,
+    "function": "F001 Create Curiosity"
+  },
+  {
+    "time": 191.8,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 192.6,
+    "function": "F001 Create Curiosity"
+  },
+  {
+    "time": 192.8,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 194.4,
+    "function": "F003 Increase Anticipation"
+  },
+  {
+    "time": 198.0,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 203.3,
+    "function": "F003 Increase Anticipation"
+  },
+  {
+    "time": 204.6,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 206.1,
+    "function": "F001 Create Curiosity"
+  },
+  {
+    "time": 206.7,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 208.4,
+    "function": "F003 Increase Anticipation"
+  },
+  {
+    "time": 213.1,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 214.4,
+    "function": "F001 Create Curiosity"
+  },
+  {
+    "time": 217.9,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 219.1,
+    "function": "F003 Increase Anticipation"
+  },
+  {
+    "time": 235.8,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 236.8,
+    "function": "F003 Increase Anticipation"
+  },
+  {
+    "time": 237.0,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 237.1,
+    "function": "F003 Increase Anticipation"
+  },
+  {
+    "time": 242.2,
+    "function": "F005 Deliver Reward"
+  },
+  {
+    "time": 242.5,
+    "function": "F003 Increase Anticipation"
+  },
+  {
+    "time": 243.5,
+    "function": "F005 Deliver Reward"
+  },
+  {
+    "time": 271.8,
+    "function": "F003 Increase Anticipation"
+  },
+  {
+    "time": 271.9,
+    "function": "F005 Deliver Reward"
+  },
+  {
+    "time": 281.4,
+    "function": "F003 Increase Anticipation"
+  },
+  {
+    "time": 281.5,
+    "function": "F005 Deliver Reward"
+  },
+  {
+    "time": 281.7,
+    "function": "F003 Increase Anticipation"
+  },
+  {
+    "time": 281.9,
+    "function": "F005 Deliver Reward"
+  },
+  {
+    "time": 283.4,
+    "function": "F003 Increase Anticipation"
+  },
+  {
+    "time": 283.5,
+    "function": "F005 Deliver Reward"
+  },
+  {
+    "time": 288.4,
+    "function": "F003 Increase Anticipation"
+  },
+  {
+    "time": 293.4,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 293.5,
+    "function": "F003 Increase Anticipation"
+  },
+  {
+    "time": 293.6,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 296.1,
+    "function": "F003 Increase Anticipation"
+  },
+  {
+    "time": 297.8,
+    "function": "F005 Deliver Reward"
+  },
+  {
+    "time": 298.6,
+    "function": "F003 Increase Anticipation"
+  },
+  {
+    "time": 304.7,
+    "function": "F005 Deliver Reward"
+  },
+  {
+    "time": 307.7,
+    "function": "F003 Increase Anticipation"
+  },
+  {
+    "time": 310.0,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 314.9,
+    "function": "F001 Create Curiosity"
+  },
+  {
+    "time": 336.5,
+    "function": "F002 Build Attachment"
+  },
+  {
+    "time": 337.0,
+    "function": "F001 Create Curiosity"
+  }
+]

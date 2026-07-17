@@ -1,0 +1,20 @@
+{
+  "version": "1.0",
+
+  "audio": {},
+  "measurements": {},
+  "facts": [],
+  "features": [],
+  "hypotheses": [],
+  "evidence": [],
+  "laws": [],
+  "prompt_rules": [],
+
+  "metadata": {
+    "title": "",
+    "artist": "",
+    "duration": 0,
+    "genre": "",
+    "created": ""
+  }
+}

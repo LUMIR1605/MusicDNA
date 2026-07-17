@@ -1,0 +1,14 @@
+{
+  "core": [
+    "F001",
+    "F002",
+    "F003"
+  ],
+  "strong": [
+    "F005"
+  ],
+  "conditional": [],
+  "genre_specific": [
+    "F004"
+  ]
+}
