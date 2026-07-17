@@ -1,57 +1,115 @@
-# TASK-001 — Technical Audit of MusicDNA
+# TASK-001 — Full Technical Audit of MusicDNA
 
 ## Objective
 
-Perform a complete technical audit of the MusicDNA repository.
+Perform a complete technical audit of the entire MusicDNA repository.
 
-Do NOT add new features.
+The purpose is to determine what works, what is unreliable, what is incomplete, and what should be fixed first.
 
-Do NOT redesign the architecture.
+## Scope
 
-The goal is to evaluate the current implementation.
+Inspect the entire repository, including:
 
-## Inspect every analysis engine.
+- core/
+- engines/
+- brain/
+- collectors/
+- database/
+- discovery/
+- schema/
+- main.py
+- analyze_all.py
+- generate_prompt.py
+- music_worker.py
+- project JSON files
+- project documentation
 
-For each engine report:
+## Restrictions
+
+- Do not modify production code.
+- Do not add new features.
+- Do not redesign the architecture.
+- Do not delete files.
+- Do not rename files.
+- Do not make assumptions without evidence.
+- Mark uncertain conclusions explicitly.
+
+## Required Analysis
+
+For every meaningful module or engine, report:
 
 - Purpose
 - Current status
-- Does it work correctly?
-- Known limitations
+- Whether it is actually used
+- Whether it works correctly
+- Bugs
+- Reliability risks
+- Duplicate or obsolete implementations
+- Missing tests
 - Confidence level
-- Suggested improvements
 - Priority
 
-## Verify especially:
+Pay special attention to:
 
-- Energy
-- BPM
-- Harmony
-- Melody
-- Pitch
-- Spectrum
-- Structure
-- Emotion
-- Production
-- Discovery
-- Statistics
-- Knowledge
+- BPM detection
+- Beat and transient detection
+- Energy analysis
+- LUFS and production metrics
+- Spectral centroid and brightness
+- Spectrum analysis
+- Pitch and melody tracking
+- Harmony and key detection
+- Structure detection
+- Emotion classification
+- Emotion journey and curve
+- Rules and hypotheses
+- Knowledge storage
+- Comparison and statistics
+- Prompt generation
+- Duplicate engine versions
+- Console noise and oversized outputs
+- Data schema consistency
+- Error handling
+- Mobile and Termux performance
 
-## Deliverables
+## Deliverable
 
-Create:
+Create one file:
 
 AUDIT_REPORT.md
 
+## Report Structure
+
 The report must contain:
 
-- Executive summary
-- Engine-by-engine review
-- Critical bugs
-- Technical debt
-- Quick wins
-- Recommended order of implementation
+1. Executive summary
+2. Architecture overview
+3. Engine inventory
+4. Critical bugs
+5. Unreliable measurements
+6. Dead, duplicate, or unused code
+7. Missing tests
+8. Performance risks
+9. Data integrity risks
+10. Quick wins
+11. Recommended repair order
+12. Proposed TASK-002 scope
 
-Do not modify production code.
+## Evidence
 
-Audit only.
+Every important conclusion must reference:
+
+- exact file path
+- function or class name
+- relevant line or code behavior
+- reason for the conclusion
+
+## Final Summary
+
+At the end include:
+
+- Number of files inspected
+- Number of critical issues
+- Number of high-priority issues
+- Number of duplicate or obsolete modules
+- Recommended first repair package
