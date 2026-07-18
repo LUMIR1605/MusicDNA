@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from core import publication
 from core.paths import write_json_atomic, write_text_atomic
 
@@ -72,6 +74,13 @@ def _mock_repository(monkeypatch, root: Path):
         return ""
 
     monkeypatch.setattr(publication, "_run_git", run_git)
+    monkeypatch.setattr(
+        publication,
+        "_remote_package_fingerprint",
+        lambda _workspace, _branch, directory: json.loads(
+            (directory / "status.json").read_text(encoding="utf-8")
+        ).get("content_fingerprint"),
+    )
     return workspace, calls
 
 
@@ -150,3 +159,199 @@ def test_launcher_status_distinguishes_enabled_pending_disabled_and_failed(tmp_p
         {"version": 1, "tracks": {"gSXJVMU3OFk": {"status": "failed"}}},
     )
     assert publication.publication_status_label(tmp_path) == "Publication failed"
+
+
+def _relation_git(monkeypatch, workspace: Path, initial_relation: str):
+    """Mock the Git state machine used by repository preparation."""
+
+    state = {"relation": initial_relation}
+    calls: list[list[str]] = []
+    workspace.mkdir(parents=True, exist_ok=True)
+    (workspace / ".git").mkdir()
+    monkeypatch.setattr(publication, "require_publication_capabilities", lambda: None)
+
+    def run_git(arguments: list[str], _cwd=None) -> str:
+        calls.append(arguments)
+        if arguments[:2] == ["status", "--porcelain"]:
+            return " M analyses" if state["relation"] == "dirty" else ""
+        if arguments[0] == "rev-list":
+            return {
+                "synchronized": "0 0",
+                "ahead": "0 1",
+                "remote_ahead": "1 0",
+                "diverged": "1 1",
+            }[state["relation"]]
+        if arguments[0] in {"push", "pull"}:
+            state["relation"] = "synchronized"
+        return ""
+
+    monkeypatch.setattr(publication, "_run_git", run_git)
+    return calls
+
+
+def test_prepare_repository_retries_clean_local_branch_ahead(monkeypatch, tmp_path: Path):
+    workspace = tmp_path / "publication" / "MusicDNA-Research"
+    calls = _relation_git(monkeypatch, workspace, "ahead")
+
+    assert publication._prepare_repository(publication.DEFAULT_CONFIG, tmp_path) == workspace
+    assert ["push", "origin", "main"] in calls
+
+
+def test_prepare_repository_handles_remote_ahead_and_dirty_workspace(monkeypatch, tmp_path: Path):
+    workspace = tmp_path / "publication" / "MusicDNA-Research"
+    calls = _relation_git(monkeypatch, workspace, "remote_ahead")
+
+    assert publication._prepare_repository(publication.DEFAULT_CONFIG, tmp_path) == workspace
+    assert ["pull", "--ff-only", "origin", "main"] in calls
+
+    dirty_workspace = tmp_path / "dirty" / "MusicDNA-Research"
+    _relation_git(monkeypatch, dirty_workspace, "dirty")
+    monkeypatch.setattr(publication, "_workspace_path", lambda _root=None: dirty_workspace)
+    with pytest.raises(publication.PublicationError, match="uncommitted changes"):
+        publication._prepare_repository(publication.DEFAULT_CONFIG, tmp_path)
+
+
+def test_prepare_repository_rejects_diverged_workspace(monkeypatch, tmp_path: Path):
+    workspace = tmp_path / "publication" / "MusicDNA-Research"
+    _relation_git(monkeypatch, workspace, "diverged")
+
+    with pytest.raises(publication.PublicationError, match="diverged"):
+        publication._prepare_repository(publication.DEFAULT_CONFIG, tmp_path)
+
+
+def test_push_failure_after_commit_keeps_local_commit_and_marks_tracks_failed(monkeypatch, tmp_path: Path):
+    _seed_completed_records(tmp_path)
+    workspace = tmp_path / "publication" / "MusicDNA-Research"
+    workspace.mkdir(parents=True)
+    calls: list[list[str]] = []
+
+    monkeypatch.setattr(publication, "_prepare_repository", lambda _config, _root=None: workspace)
+
+    def run_git(arguments: list[str], _cwd=None) -> str:
+        calls.append(arguments)
+        if arguments[:2] == ["status", "--porcelain"]:
+            return " M analyses" if len(arguments) > 2 else ""
+        if arguments[0] == "push":
+            raise publication.PublicationError("push failed")
+        return ""
+
+    monkeypatch.setattr(publication, "_run_git", run_git)
+    result = publication.publish_pending_results(lambda _message: None, tmp_path)
+
+    assert not result.published
+    assert result.failed == list(TRACKS)
+    assert any(call[0] == "commit" for call in calls)
+    assert (workspace / "analyses").exists()
+    state = json.loads((tmp_path / "publication" / "state.json").read_text(encoding="utf-8"))
+    assert {entry["status"] for entry in state["tracks"].values()} == {"failed"}
+
+
+def test_retry_pushes_existing_local_commit_without_creating_another(monkeypatch, tmp_path: Path):
+    _seed_completed_records(tmp_path)
+    workspace = tmp_path / "publication" / "MusicDNA-Research"
+    workspace.mkdir(parents=True)
+    records, _incomplete, _unmatched = publication.discover_completed_analyses(tmp_path)
+    transaction = publication._PackageTransaction(workspace)
+    for record in records:
+        publication._write_package(workspace, record, transaction)
+
+    calls = _relation_git(monkeypatch, workspace, "ahead")
+
+    def remote_fingerprint(_workspace, _branch, directory):
+        return json.loads((directory / "status.json").read_text(encoding="utf-8"))["content_fingerprint"]
+
+    monkeypatch.setattr(publication, "_remote_package_fingerprint", remote_fingerprint)
+    result = publication.publish_pending_results(lambda _message: None, tmp_path)
+
+    assert result.already_published == list(TRACKS)
+    assert not result.published
+    assert ["push", "origin", "main"] in calls
+    assert not any(call[0] == "commit" for call in calls)
+
+
+def test_unchanged_local_package_is_not_published_without_remote_match(monkeypatch, tmp_path: Path):
+    _seed_completed_records(tmp_path)
+    workspace = tmp_path / "publication" / "MusicDNA-Research"
+    workspace.mkdir(parents=True)
+    records, _incomplete, _unmatched = publication.discover_completed_analyses(tmp_path)
+    transaction = publication._PackageTransaction(workspace)
+    for record in records:
+        publication._write_package(workspace, record, transaction)
+
+    monkeypatch.setattr(publication, "_prepare_repository", lambda _config, _root=None: workspace)
+    monkeypatch.setattr(publication, "_remote_package_fingerprint", lambda *_args: None)
+    result = publication.publish_pending_results(lambda _message: None, tmp_path)
+
+    assert not result.published
+    assert not result.already_published
+    assert result.failed == list(TRACKS)
+
+
+def test_commit_failure_restores_generated_package_files(monkeypatch, tmp_path: Path):
+    _seed_completed_records(tmp_path)
+    workspace = tmp_path / "publication" / "MusicDNA-Research"
+    workspace.mkdir(parents=True)
+
+    monkeypatch.setattr(publication, "_prepare_repository", lambda _config, _root=None: workspace)
+
+    def run_git(arguments: list[str], _cwd=None) -> str:
+        if arguments[:2] == ["status", "--porcelain"]:
+            return " M analyses" if len(arguments) > 2 else ""
+        if arguments[0] == "commit":
+            raise publication.PublicationError("commit failed")
+        return ""
+
+    monkeypatch.setattr(publication, "_run_git", run_git)
+    result = publication.publish_pending_results(lambda _message: None, tmp_path)
+
+    assert result.failed == list(TRACKS)
+    assert not list((workspace / "analyses").rglob("*"))
+
+
+def test_dirty_workspace_failure_marks_completed_tracks_failed(monkeypatch, tmp_path: Path):
+    _seed_completed_records(tmp_path)
+    monkeypatch.setattr(
+        publication,
+        "_prepare_repository",
+        lambda _config, _root=None: (_ for _ in ()).throw(
+            publication.PublicationError("workspace has uncommitted changes")
+        ),
+    )
+
+    result = publication.publish_pending_results(lambda _message: None, tmp_path)
+
+    assert result.failed == list(TRACKS)
+    assert not result.published
+
+
+def test_package_write_failure_restores_recoverable_workspace(monkeypatch, tmp_path: Path):
+    _seed_completed_records(tmp_path)
+    workspace = tmp_path / "publication" / "MusicDNA-Research"
+    workspace.mkdir(parents=True)
+    publication.load_publication_config(tmp_path)
+    monkeypatch.setattr(publication, "_prepare_repository", lambda _config, _root=None: workspace)
+
+    original_write = publication.write_json_atomic
+
+    def fail_write(path, *args, **kwargs):
+        if Path(path).name == "analysis.json":
+            raise OSError("disk unavailable")
+        return original_write(path, *args, **kwargs)
+
+    monkeypatch.setattr(publication, "write_json_atomic", fail_write)
+    result = publication.publish_pending_results(lambda _message: None, tmp_path)
+
+    assert result.failed == list(TRACKS)
+    assert not (workspace / "analyses").exists()
+
+
+def test_repeated_successful_retry_is_idempotent_after_remote_verification(monkeypatch, tmp_path: Path):
+    _seed_completed_records(tmp_path)
+    _mock_repository(monkeypatch, tmp_path)
+
+    first = publication.publish_pending_results(lambda _message: None, tmp_path)
+    second = publication.publish_pending_results(lambda _message: None, tmp_path)
+
+    assert first.published == list(TRACKS)
+    assert second.already_published == list(TRACKS)
+    assert not second.failed

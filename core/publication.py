@@ -39,6 +39,56 @@ class PublicationError(RuntimeError):
     """Raised for a user-actionable private publication failure."""
 
 
+@dataclass
+class _PackageTransaction:
+    """Restore only MusicDNA-generated package files when a pre-commit step fails."""
+
+    workspace: Path
+    snapshots: dict[Path, dict[str, bytes | None]] = field(default_factory=dict)
+    staged: bool = False
+    committed: bool = False
+
+    def track(self, directory: Path) -> None:
+        if directory in self.snapshots:
+            return
+        self.snapshots[directory] = {
+            name: (path.read_bytes() if (path := directory / name).is_file() else None)
+            for name in ("analysis.json", "metadata.json", "status.json", "summary.md")
+        }
+
+    def rollback(self) -> None:
+        """Undo only generated package changes made before a successful commit."""
+
+        if self.committed:
+            return
+        try:
+            directories = [str(directory.relative_to(self.workspace)) for directory in self.snapshots]
+            if self.staged and directories:
+                try:
+                    _run_git(["restore", "--staged", "--", *directories], self.workspace)
+                except PublicationError as error:
+                    raise PublicationError(
+                        "MusicDNA could not unstage generated publication files. "
+                        "The publication workspace needs attention before retrying."
+                    ) from error
+            for directory, previous_files in self.snapshots.items():
+                for name, content in previous_files.items():
+                    path = directory / name
+                    if content is None:
+                        if path.exists():
+                            path.unlink()
+                    else:
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        path.write_bytes(content)
+                if directory.exists() and not any(directory.iterdir()):
+                    directory.rmdir()
+        except OSError as error:
+            raise PublicationError(
+                "MusicDNA could not restore generated publication files. "
+                "The publication workspace needs attention before retrying."
+            ) from error
+
+
 @dataclass(frozen=True)
 class CompletedAnalysis:
     video_id: str
@@ -251,10 +301,46 @@ def _prepare_repository(config: dict[str, Any], root: Path | None = None) -> Pat
     else:
         _run_git(["fetch", "origin"], workspace)
         _run_git(["checkout", config["branch"]], workspace)
+    relation = _repository_relation(workspace, config["branch"])
+    if relation == "dirty":
+        raise PublicationError(
+            "MusicDNA publication workspace has uncommitted changes. "
+            "It was left untouched; resolve them before retrying."
+        )
+    if relation == "remote_ahead":
         _run_git(["pull", "--ff-only", "origin", config["branch"]], workspace)
-    if _run_git(["status", "--porcelain"], workspace).strip():
-        raise PublicationError("MusicDNA publication workspace has uncommitted changes.")
+    elif relation == "ahead":
+        _run_git(["push", "origin", config["branch"]], workspace)
+        _run_git(["fetch", "origin"], workspace)
+    elif relation == "diverged":
+        raise PublicationError(
+            "MusicDNA publication workspace has diverged from the remote branch. "
+            "It was left untouched; resolve it before retrying."
+        )
+    if _repository_relation(workspace, config["branch"]) != "synchronized":
+        raise PublicationError("MusicDNA publication workspace could not be synchronized with GitHub.")
     return workspace
+
+
+def _repository_relation(workspace: Path, branch: str) -> str:
+    """Return a deterministic local/remote relation after fetch and checkout."""
+
+    if _run_git(["status", "--porcelain"], workspace).strip():
+        return "dirty"
+    counts = _run_git(
+        ["rev-list", "--left-right", "--count", f"origin/{branch}...{branch}"],
+        workspace,
+    ).split()
+    if len(counts) != 2 or not all(value.isdigit() for value in counts):
+        raise PublicationError("MusicDNA could not determine publication repository status.")
+    behind, ahead = (int(value) for value in counts)
+    if behind and ahead:
+        return "diverged"
+    if behind:
+        return "remote_ahead"
+    if ahead:
+        return "ahead"
+    return "synchronized"
 
 
 def _remote_directory(workspace: Path, record: CompletedAnalysis) -> Path:
@@ -269,7 +355,24 @@ def _remote_directory(workspace: Path, record: CompletedAnalysis) -> Path:
     return analyses / f"{record.video_id}_{_safe_track_name(record.title)}"
 
 
-def _write_package(workspace: Path, record: CompletedAnalysis) -> tuple[Path, str]:
+def _remote_package_fingerprint(workspace: Path, branch: str, directory: Path) -> str | None:
+    """Read a package fingerprint from the fetched remote branch, if it exists."""
+
+    relative = directory.relative_to(workspace).as_posix()
+    try:
+        content = _run_git(["show", f"origin/{branch}:{relative}/status.json"], workspace)
+        status = json.loads(content)
+    except (PublicationError, json.JSONDecodeError):
+        return None
+    fingerprint = status.get("content_fingerprint") if isinstance(status, dict) else None
+    return fingerprint if isinstance(fingerprint, str) else None
+
+
+def _write_package(
+    workspace: Path,
+    record: CompletedAnalysis,
+    transaction: _PackageTransaction,
+) -> tuple[Path, str, bool]:
     analysis = _load_json(record.dna_path, None)
     if not isinstance(analysis, dict):
         raise PublicationError("DNA artifact has an unsupported format")
@@ -286,12 +389,13 @@ def _write_package(workspace: Path, record: CompletedAnalysis) -> tuple[Path, st
     if directory.exists():
         existing = _load_json(directory / "status.json", {})
         if isinstance(existing, dict) and existing.get("content_fingerprint") == fingerprint:
-            return directory, "unchanged"
+            return directory, fingerprint, True
+    transaction.track(directory)
     write_json_atomic(directory / "analysis.json", analysis)
     write_json_atomic(directory / "metadata.json", metadata)
     write_json_atomic(directory / "status.json", status)
     write_text_atomic(directory / "summary.md", summary)
-    return directory, fingerprint
+    return directory, fingerprint, False
 
 
 def _mark_track(state: dict[str, Any], video_id: str, status: str, fingerprint: str | None = None) -> None:
@@ -330,17 +434,32 @@ def publish_pending_results(
         return result
 
     changed: list[tuple[str, str]] = []
+    transaction = _PackageTransaction(workspace)
     for record in records:
         try:
-            directory, fingerprint = _write_package(workspace, record)
-        except PublicationError:
-            _mark_track(state, record.video_id, "failed")
-            result.failed.append(record.video_id)
-            continue
-        if fingerprint == "unchanged":
-            _mark_track(state, record.video_id, "published")
-            result.already_published.append(record.video_id)
-            progress(f"Already published: {record.video_id}")
+            directory, fingerprint, unchanged = _write_package(workspace, record, transaction)
+        except (OSError, TypeError, ValueError, PublicationError):
+            try:
+                transaction.rollback()
+            except PublicationError:
+                pass
+            for affected in records:
+                _mark_track(state, affected.video_id, "failed")
+                if affected.video_id not in result.failed:
+                    result.failed.append(affected.video_id)
+            _save_publication_state(state, root)
+            progress("Publication package preparation failed. Completed analyses remain local and can be retried.")
+            return result
+        if unchanged:
+            remote_fingerprint = _remote_package_fingerprint(workspace, config["branch"], directory)
+            if remote_fingerprint == fingerprint:
+                _mark_track(state, record.video_id, "published", remote_fingerprint)
+                result.already_published.append(record.video_id)
+                progress(f"Already published: {record.video_id}")
+            else:
+                _mark_track(state, record.video_id, "failed")
+                result.failed.append(record.video_id)
+                progress(f"Publication needs retry: {record.video_id}")
         else:
             changed.append((record.video_id, fingerprint))
             progress(f"Prepared for publication: {record.video_id}")
@@ -348,14 +467,23 @@ def publish_pending_results(
     if changed:
         try:
             _run_git(["add", "--", "analyses"], workspace)
+            transaction.staged = True
             if _run_git(["status", "--porcelain", "--", "analyses"], workspace).strip():
                 _run_git(["commit", "-m", f"Publish MusicDNA analyses: {', '.join(video_id for video_id, _ in changed)}"], workspace)
+                transaction.committed = True
                 _run_git(["push", "origin", config["branch"]], workspace)
+            else:
+                raise PublicationError("MusicDNA could not stage generated publication files.")
             for video_id, fingerprint in changed:
                 _mark_track(state, video_id, "published", fingerprint)
                 result.published.append(video_id)
                 progress(f"Published: {video_id}")
         except PublicationError:
+            if not transaction.committed:
+                try:
+                    transaction.rollback()
+                except PublicationError:
+                    pass
             for video_id, _ in changed:
                 _mark_track(state, video_id, "failed")
                 result.failed.append(video_id)
