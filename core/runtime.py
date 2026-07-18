@@ -11,6 +11,7 @@ from typing import Callable, Iterable
 CORE_PYTHON_MODULES = ("numpy", "jsonschema")
 CORE_BINARIES = ("ffmpeg",)
 OPTIONAL_BINARIES = ("ffprobe", "yt-dlp", "aubioonset")
+INGESTION_PYTHON_MODULES = ("yt_dlp",)
 
 
 @dataclass(frozen=True)
@@ -59,6 +60,17 @@ def require_core_capabilities() -> CapabilityReport:
     """Require only the packages and binary needed by the active audio builder."""
 
     report = check_capabilities(CORE_PYTHON_MODULES, CORE_BINARIES)
+    if not report.ready:
+        raise RuntimeCapabilityError(report)
+    return report
+
+
+def require_ingestion_capabilities() -> CapabilityReport:
+    """Require the local dependencies used by the YouTube ingestion command."""
+
+    report = check_capabilities(
+        (*CORE_PYTHON_MODULES, *INGESTION_PYTHON_MODULES), CORE_BINARIES
+    )
     if not report.ready:
         raise RuntimeCapabilityError(report)
     return report

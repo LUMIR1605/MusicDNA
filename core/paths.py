@@ -53,6 +53,18 @@ def dna_output_directory() -> Path:
     return data_root() / "dna"
 
 
+def samples_directory() -> Path:
+    return data_root() / "samples"
+
+
+def reports_directory() -> Path:
+    return data_root() / "reports"
+
+
+def ingestion_state_path() -> Path:
+    return data_root() / "ingestion" / "state.json"
+
+
 def ensure_directory(directory: Path) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
     return directory
