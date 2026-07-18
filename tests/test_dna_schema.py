@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from engines import dna_builder
@@ -56,6 +57,23 @@ def test_canonical_schema_rejects_missing_rhythm_contract(valid_rhythm):
 
     with pytest.raises(DNASchemaValidationError, match="rhythm"):
         validate_dna(payload)
+
+
+def test_schema_normalizes_numpy_measurements_before_validation(valid_rhythm):
+    numpy_rhythm = {
+        "transients": dict(valid_rhythm["transients"], positions_seconds=np.array([0.5, 1.0]), count=np.int64(2)),
+        "beat_positions": dict(valid_rhythm["beat_positions"], positions_seconds=np.array([0.5, 1.0]), count=np.int64(2)),
+        "bpm": dict(valid_rhythm["bpm"], value=np.float32(120.0)),
+    }
+    payload = valid_payload(numpy_rhythm)
+    payload["energy"] = {"avg": np.float64(1.25)}
+    payload["beats"] = {"count": np.int64(2), "first": np.float64(0.5), "last": np.float32(1.0)}
+
+    normalized = validate_dna(payload)
+
+    assert isinstance(normalized["energy"]["avg"], float)
+    assert isinstance(normalized["beats"]["count"], int)
+    assert normalized["rhythm"]["transients"]["positions_seconds"] == [0.5, 1.0]
 
 
 def test_builder_validates_versioned_payload_and_preserves_legacy_beats(monkeypatch, valid_rhythm):

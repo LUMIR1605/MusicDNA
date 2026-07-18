@@ -89,7 +89,7 @@ def build(audio_file, title=None, metadata=None):
     print("Loading Rules...")
     dna["rules"] = rules_analyze(dna)
 
-    validate_dna(dna)
+    dna = validate_dna(dna)
 
     print("Loading Knowledge...")
     knowledge_analyze(title or audio_file, dna, metadata)

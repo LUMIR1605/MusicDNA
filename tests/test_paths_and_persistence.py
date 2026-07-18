@@ -3,7 +3,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from core.paths import data_root
+import numpy as np
+import pytest
+
+from core.paths import data_root, write_json_atomic
 from engines.dna_store import save
 from engines.knowledge_engine import analyze
 
@@ -55,3 +58,34 @@ def test_dna_store_creates_output_directory(tmp_path: Path):
 
     assert saved == output_directory / "fixture.json"
     assert json.loads(saved.read_text(encoding="utf-8"))["schema_version"] == "dna-output-v1"
+
+
+def test_atomic_json_write_normalizes_nested_numpy_values(tmp_path: Path):
+    target = tmp_path / "data.json"
+    write_json_atomic(
+        target,
+        {
+            "float64": np.float64(1.25),
+            "float32": np.float32(2.5),
+            "int64": np.int64(7),
+            "array": np.array([np.int64(1), np.float32(2.5)]),
+            "nested": ({"value": np.float64(3.5)},),
+        },
+    )
+
+    assert json.loads(target.read_text(encoding="utf-8")) == {
+        "float64": 1.25,
+        "float32": 2.5,
+        "int64": 7,
+        "array": [1, 2.5],
+        "nested": [{"value": 3.5}],
+    }
+
+
+def test_atomic_json_write_rejects_unsupported_values(tmp_path: Path):
+    target = tmp_path / "data.json"
+
+    with pytest.raises(TypeError, match="Unsupported value for JSON serialization"):
+        write_json_atomic(target, {"unsupported": object()})
+
+    assert not target.exists()

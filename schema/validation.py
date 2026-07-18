@@ -9,6 +9,8 @@ from typing import Any, Mapping
 
 from jsonschema import Draft202012Validator
 
+from core.paths import to_json_compatible
+
 
 SCHEMA_PATH = Path(__file__).with_name("dna_output_v1.json")
 
@@ -23,11 +25,14 @@ def load_schema() -> dict[str, Any]:
         return json.load(schema_file)
 
 
-def validate_dna(payload: Mapping[str, Any]) -> None:
+def validate_dna(payload: Mapping[str, Any]) -> dict[str, Any]:
+    normalized_payload = to_json_compatible(dict(payload))
     validator = Draft202012Validator(load_schema())
-    errors = sorted(validator.iter_errors(dict(payload)), key=lambda error: list(error.path))
+    errors = sorted(
+        validator.iter_errors(normalized_payload), key=lambda error: list(error.path)
+    )
     if not errors:
-        return
+        return normalized_payload
 
     first_error = errors[0]
     location = ".".join(str(item) for item in first_error.path) or "root"

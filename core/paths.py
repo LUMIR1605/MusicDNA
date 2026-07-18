@@ -9,6 +9,11 @@ import tempfile
 from pathlib import Path
 from typing import Any, Mapping
 
+try:
+    import numpy as np
+except ImportError:  # The runtime checker reports the missing dependency when needed.
+    np = None
+
 
 APP_NAME = "MusicDNA"
 
@@ -78,5 +83,42 @@ def write_text_atomic(path: Path, content: str, encoding: str = "utf-8") -> None
                 temporary_path.unlink()
 
 
+def to_json_compatible(value: Any) -> Any:
+    """Convert supported nested values to native JSON-compatible Python values."""
+
+    if np is not None and isinstance(value, np.generic):
+        return to_json_compatible(value.item())
+    if np is not None and isinstance(value, np.ndarray):
+        return to_json_compatible(value.tolist())
+    if value is None or isinstance(value, (str, bool)):
+        return value
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        if not value == value or value in (float("inf"), float("-inf")):
+            raise ValueError("Non-finite floating-point values are not valid JSON data")
+        return value
+    if isinstance(value, dict):
+        normalized: dict[str, Any] = {}
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise TypeError(
+                    "JSON object keys must be strings; "
+                    f"received {type(key).__module__}.{type(key).__qualname__}"
+                )
+            normalized[key] = to_json_compatible(item)
+        return normalized
+    if isinstance(value, (list, tuple)):
+        return [to_json_compatible(item) for item in value]
+    raise TypeError(
+        "Unsupported value for JSON serialization: "
+        f"{type(value).__module__}.{type(value).__qualname__}"
+    )
+
+
 def write_json_atomic(path: Path, data: Any) -> None:
-    write_text_atomic(path, json.dumps(data, indent=2, ensure_ascii=False))
+    normalized = to_json_compatible(data)
+    write_text_atomic(
+        path,
+        json.dumps(normalized, indent=2, ensure_ascii=False, allow_nan=False),
+    )
