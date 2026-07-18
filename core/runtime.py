@@ -76,6 +76,15 @@ def require_ingestion_capabilities() -> CapabilityReport:
     return report
 
 
+def require_publication_capabilities() -> CapabilityReport:
+    """Require only the local Git client used for private result publication."""
+
+    report = check_capabilities(binaries=("git",))
+    if not report.ready:
+        raise RuntimeCapabilityError(report)
+    return report
+
+
 def require_binary(name: str) -> str:
     """Return a binary path or raise the same structured capability error."""
 

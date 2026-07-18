@@ -10,6 +10,12 @@ musicdna add "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
 Use `python musicdna.py add "<url>"` when the local command entry point has not been installed yet.
 
+## Private research publication
+
+Successful analyses are published automatically to the private `LUMIR1605/MusicDNA-Research` repository after local DNA, Knowledge, and summary persistence complete. MusicDNA creates a credential-free local publication configuration under its application data directory on first use; GitHub authentication remains managed by Git Credential Manager, GitHub CLI, or an SSH agent.
+
+Use `musicdna publish-pending` to retry completed local analyses without downloading or analyzing them again. See `TASK-005_USAGE.md` for the publication layout and recovery steps.
+
 ## Windows desktop launcher
 
 After normal setup, double-click `START_MUSICDNA.pyw` to open the MusicDNA desktop launcher without a terminal. `START_MUSICDNA.bat` is also provided for Windows systems where the Python file association is unavailable. See `TASK-004_USAGE.md` for setup and desktop shortcut instructions.

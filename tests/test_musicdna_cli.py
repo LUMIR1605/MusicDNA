@@ -4,6 +4,7 @@ from pathlib import Path
 
 import musicdna
 from core.ingestion import IngestionError, IngestionResult
+from core.publication import PublicationResult
 
 
 def test_add_command_reports_completed_result(monkeypatch, capsys):
@@ -28,3 +29,14 @@ def test_add_command_reports_expected_ingestion_error(monkeypatch, capsys):
 
     assert musicdna.main(["add", "https://example.com"]) == 2
     assert "MusicDNA add failed: bad URL" in capsys.readouterr().out
+
+
+def test_publish_pending_command_reports_retryable_result(monkeypatch, capsys):
+    monkeypatch.setattr(
+        musicdna,
+        "publish_pending_results",
+        lambda: PublicationResult(published=["dQw4w9WgXcQ"]),
+    )
+
+    assert musicdna.main(["publish-pending"]) == 0
+    assert "Publication: 1 published" in capsys.readouterr().out

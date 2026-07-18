@@ -19,6 +19,7 @@ from core.paths import (
     write_json_atomic,
     write_text_atomic,
 )
+from core.publication import PublicationError, publish_pending_results
 from core.runtime import require_binary, require_ingestion_capabilities
 from engines.dna_builder import build as build_dna
 
@@ -209,6 +210,20 @@ def _find_content_duplicate(items: dict[str, Any], video_id: str, digest: str) -
     return None
 
 
+def _publish_completed_analyses(progress: Callable[[str], None]) -> None:
+    """Publish after local completion without allowing publication to invalidate analysis."""
+
+    try:
+        publication = publish_pending_results(progress)
+    except PublicationError:
+        progress("Publication failed. Completed analyses remain local and can be retried.")
+        return
+    if publication.failed:
+        progress("Publication failed. Completed analyses remain local and can be retried.")
+    elif publication.published:
+        progress("Publication completed.")
+
+
 def ingest(url: str, progress: Callable[[str], None] = print) -> IngestionResult:
     """Run validation, download, analysis, persistence, and short reporting."""
 
@@ -222,6 +237,7 @@ def ingest(url: str, progress: Callable[[str], None] = print) -> IngestionResult
         completed = _existing_completed_result(existing)
         if completed:
             progress("Duplicate detected: this video has already been processed.")
+            _publish_completed_analyses(progress)
             return completed
 
     metadata = existing.get("metadata") if existing else None
@@ -287,4 +303,5 @@ def ingest(url: str, progress: Callable[[str], None] = print) -> IngestionResult
     record.pop("error", None)
     _save_state(state_path, state)
     progress("Completed.")
+    _publish_completed_analyses(progress)
     return IngestionResult(video_id, "completed", metadata["title"], sample_path, dna_path, report_path)
