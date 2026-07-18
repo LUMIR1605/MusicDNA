@@ -5,6 +5,18 @@ from pathlib import Path
 import musicdna_launcher
 
 
+def test_close_decision_allows_idle_launcher_to_close():
+    assert musicdna_launcher.can_close_launcher(job_running=False)
+
+
+def test_close_decision_keeps_active_job_open_by_default():
+    assert not musicdna_launcher.can_close_launcher(job_running=True)
+
+
+def test_close_decision_allows_explicit_active_job_cancellation():
+    assert musicdna_launcher.can_close_launcher(job_running=True, cancellation_confirmed=True)
+
+
 def test_open_report_uses_windows_default_handler(monkeypatch, tmp_path: Path):
     report = tmp_path / "summary.txt"
     report.write_text("summary", encoding="utf-8")

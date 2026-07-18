@@ -33,6 +33,12 @@ def open_report(report_path: Path) -> None:
     webbrowser.open(path.as_uri())
 
 
+def can_close_launcher(job_running: bool, cancellation_confirmed: bool = False) -> bool:
+    """Return whether the launcher can close without silently interrupting a job."""
+
+    return not job_running or cancellation_confirmed
+
+
 if tk is not None:
 
     class MusicDNALauncher(tk.Tk):
@@ -47,11 +53,13 @@ if tk is not None:
 
             self._events: queue.Queue[tuple[str, Any]] = queue.Queue()
             self._running = False
+            self._closing = False
             self.url = tk.StringVar()
             self.status = tk.StringVar(value="Paste one YouTube video link to begin.")
             self.result = tk.StringVar(value="")
 
             self._build_ui()
+            self.protocol("WM_DELETE_WINDOW", self._on_close_request)
             self.after(100, self._process_events)
 
         def _build_ui(self) -> None:
@@ -158,7 +166,25 @@ if tk is not None:
             else:
                 self._events.put(("success", result))
 
+        def _on_close_request(self) -> None:
+            if can_close_launcher(self._running):
+                self.destroy()
+                return
+
+            close_now = messagebox.askyesno(
+                "MusicDNA",
+                "MusicDNA is still processing this job. Closing now will interrupt the "
+                "download, analysis, or report save.\n\nClose anyway?",
+                default="no",
+                parent=self,
+            )
+            if can_close_launcher(self._running, close_now):
+                self._closing = True
+                self.destroy()
+
         def _process_events(self) -> None:
+            if self._closing:
+                return
             try:
                 while True:
                     event, value = self._events.get_nowait()
