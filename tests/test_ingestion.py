@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from core import ingestion
+from core.publication import PublicationResult
 from core.paths import write_json_atomic
 
 
@@ -40,6 +41,8 @@ def configure_pipeline(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(ingestion, "ingestion_state_path", lambda: state)
     monkeypatch.setattr(ingestion, "samples_directory", lambda: samples)
     monkeypatch.setattr(ingestion, "reports_directory", lambda: reports)
+    monkeypatch.setattr(ingestion, "publish_pending_results", lambda _progress: PublicationResult())
+    monkeypatch.setattr(ingestion, "_create_report_workspace", lambda *_args, **_kwargs: None)
     return state, samples, reports
 
 
@@ -123,6 +126,33 @@ def test_completed_video_is_detected_without_network_or_reanalysis(monkeypatch, 
     result = ingestion.ingest(URL, lambda _message: None)
 
     assert result.status == "duplicate"
+
+
+def test_completed_analysis_publication_failure_does_not_invalidate_local_result(monkeypatch, tmp_path: Path):
+    configure_pipeline(monkeypatch, tmp_path)
+    monkeypatch.setattr(ingestion, "inspect_video", lambda *_args: metadata())
+    monkeypatch.setattr(ingestion, "download_audio", lambda *_args: (tmp_path / "sample.wav"))
+
+    sample = tmp_path / "sample.wav"
+    sample.write_bytes(b"audio")
+
+    def build(*_args, **_kwargs):
+        dna_path = tmp_path / "dna" / "example.json"
+        dna_path.parent.mkdir(parents=True, exist_ok=True)
+        dna_path.write_text(json.dumps(dna_payload()), encoding="utf-8")
+        return dna_payload(), dna_path
+
+    monkeypatch.setattr(ingestion, "build_dna", build)
+    monkeypatch.setattr(
+        ingestion,
+        "publish_pending_results",
+        lambda _progress: PublicationResult(failed=[VIDEO_ID]),
+    )
+
+    result = ingestion.ingest(URL, lambda _message: None)
+
+    assert result.status == "completed"
+    assert result.report_path and result.report_path.exists()
 
 
 def test_downloaded_state_resumes_analysis_without_downloading(monkeypatch, tmp_path: Path):

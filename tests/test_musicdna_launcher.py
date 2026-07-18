@@ -57,6 +57,24 @@ def test_open_report_uses_windows_default_handler(monkeypatch, tmp_path: Path):
     assert opened == [str(report.resolve())]
 
 
+def test_copy_report_path_uses_tk_clipboard_contract(tmp_path: Path):
+    copied: list[str] = []
+
+    class Clipboard:
+        def clipboard_clear(self):
+            copied.append("cleared")
+
+        def clipboard_append(self, value):
+            copied.append(value)
+
+        def update(self):
+            copied.append("updated")
+
+    musicdna_launcher.copy_report_path(Clipboard(), tmp_path / "report")
+
+    assert copied == ["cleared", str((tmp_path / "report").resolve()), "updated"]
+
+
 def test_batch_launcher_uses_repository_relative_gui_entry_point():
     launcher = Path(__file__).resolve().parents[1] / "START_MUSICDNA.bat"
     content = launcher.read_text(encoding="utf-8")

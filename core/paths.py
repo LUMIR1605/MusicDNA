@@ -61,8 +61,49 @@ def reports_directory() -> Path:
     return data_root() / "reports"
 
 
+def desktop_directory(
+    environ: Mapping[str, str] | None = None,
+    home: Path | None = None,
+    platform_name: str | None = None,
+) -> Path:
+    """Return the user's conventional Desktop directory without creating it."""
+
+    environment = os.environ if environ is None else environ
+    user_home = Path.home() if home is None else Path(home)
+    system = sys.platform if platform_name is None else platform_name
+    if system.startswith("win"):
+        profile = environment.get("USERPROFILE")
+        return (Path(profile) if profile else user_home) / "Desktop"
+    return user_home / "Desktop"
+
+
+def desktop_reports_directory(
+    desktop: Path | None = None,
+    fallback_root: Path | None = None,
+) -> Path:
+    """Return the report-workspace root, with a safe local fallback if Desktop is absent."""
+
+    candidate = desktop_directory() if desktop is None else Path(desktop)
+    if candidate.is_dir():
+        return candidate / "MusicDNA Reports"
+    base = data_root() if fallback_root is None else Path(fallback_root)
+    return base / "reports-workspace"
+
+
 def ingestion_state_path() -> Path:
     return data_root() / "ingestion" / "state.json"
+
+
+def publication_config_path() -> Path:
+    return data_root() / "publication" / "config.json"
+
+
+def publication_state_path() -> Path:
+    return data_root() / "publication" / "state.json"
+
+
+def publication_workspace_directory() -> Path:
+    return data_root() / "publication" / "MusicDNA-Research"
 
 
 def ensure_directory(directory: Path) -> Path:

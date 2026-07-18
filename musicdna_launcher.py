@@ -15,6 +15,7 @@ from typing import Any
 from core.ingestion import IngestionError, IngestionResult
 from core.launcher_service import run_add, validate_add_url
 from core.paths import data_root, ensure_directory
+from core.publication import PublicationError, publication_status_label, publish_pending_results
 from core.runtime import RuntimeCapabilityError
 
 try:
@@ -34,6 +35,14 @@ def open_report(report_path: Path) -> None:
         os.startfile(str(path))
         return
     webbrowser.open(path.as_uri())
+
+
+def copy_report_path(root: tk.Misc, report_path: Path) -> None:
+    """Put a completed report-workspace path on the desktop clipboard."""
+
+    root.clipboard_clear()
+    root.clipboard_append(str(Path(report_path).resolve()))
+    root.update()
 
 
 def can_close_launcher(job_running: bool, cancellation_confirmed: bool = False) -> bool:
@@ -95,16 +104,18 @@ if tk is not None:
         def __init__(self) -> None:
             super().__init__()
             self.title("MusicDNA")
-            self.geometry("640x420")
-            self.minsize(560, 360)
+            self.geometry("640x480")
+            self.minsize(560, 410)
             self.configure(padx=24, pady=22, bg="#101820")
 
             self._events: queue.Queue[tuple[str, Any]] = queue.Queue()
             self._running = False
             self._closing = False
+            self._workspace_path: Path | None = None
             self.url = tk.StringVar()
             self.status = tk.StringVar(value="Paste one YouTube video link to begin.")
             self.result = tk.StringVar(value="")
+            self.publication = tk.StringVar(value=publication_status_label())
 
             self._build_ui()
             self.protocol("WM_DELETE_WINDOW", self._on_close_request)
@@ -149,6 +160,28 @@ if tk is not None:
             )
             self.start_button.pack(anchor="w", pady=(14, 10))
 
+            self.publish_button = tk.Button(
+                self,
+                text="PUBLISH PENDING RESULTS",
+                command=self.publish_pending,
+                font=("Segoe UI", 9, "bold"),
+                bg="#27485a",
+                fg="#e8f4ff",
+                activebackground="#315d72",
+                activeforeground="#ffffff",
+                relief="flat",
+                padx=14,
+                pady=6,
+            )
+            self.publish_button.pack(anchor="w")
+            tk.Label(
+                self,
+                textvariable=self.publication,
+                font=("Segoe UI", 9),
+                fg="#83d8a8",
+                bg="#101820",
+            ).pack(anchor="w", pady=(4, 10))
+
             tk.Label(
                 self,
                 textvariable=self.status,
@@ -167,6 +200,46 @@ if tk is not None:
                 wraplength=570,
                 justify="left",
             ).pack(anchor="w", pady=(4, 8))
+
+            self.report_folder_button = tk.Button(
+                self,
+                text="OPEN REPORT FOLDER",
+                command=self.open_report_folder,
+                state="disabled",
+                font=("Segoe UI", 9, "bold"),
+                bg="#27485a",
+                fg="#e8f4ff",
+                relief="flat",
+                padx=12,
+                pady=5,
+            )
+            self.report_folder_button.pack(anchor="w")
+            self.report_button = tk.Button(
+                self,
+                text="OPEN REPORT",
+                command=self.open_workspace_report,
+                state="disabled",
+                font=("Segoe UI", 9, "bold"),
+                bg="#27485a",
+                fg="#e8f4ff",
+                relief="flat",
+                padx=12,
+                pady=5,
+            )
+            self.report_button.pack(anchor="w", pady=(4, 0))
+            self.copy_report_path_button = tk.Button(
+                self,
+                text="COPY REPORT PATH",
+                command=self.copy_workspace_path,
+                state="disabled",
+                font=("Segoe UI", 9, "bold"),
+                bg="#27485a",
+                fg="#e8f4ff",
+                relief="flat",
+                padx=12,
+                pady=5,
+            )
+            self.copy_report_path_button.pack(anchor="w", pady=(4, 10))
 
             self.progress = scrolledtext.ScrolledText(
                 self,
@@ -199,10 +272,23 @@ if tk is not None:
 
             self._running = True
             self.start_button.configure(state="disabled")
+            self.publish_button.configure(state="disabled")
+            self._set_workspace_controls(None)
             self.result.set("")
             self.status.set("Starting MusicDNA...")
             self._append_progress("Starting MusicDNA...")
             threading.Thread(target=self._run_pipeline, args=(url,), daemon=True).start()
+
+        def publish_pending(self) -> None:
+            if self._running:
+                return
+            self._running = True
+            self.start_button.configure(state="disabled")
+            self.publish_button.configure(state="disabled")
+            self.result.set("")
+            self.status.set("Publishing completed MusicDNA results...")
+            self._append_progress("Publishing completed MusicDNA results...")
+            threading.Thread(target=self._run_publication, daemon=True).start()
 
         def _run_pipeline(self, url: str) -> None:
             try:
@@ -221,6 +307,26 @@ if tk is not None:
                 )
             else:
                 self._events.put(("success", result))
+
+        def _run_publication(self) -> None:
+            try:
+                result = publish_pending_results(
+                    lambda message: self._events.put(("progress", message))
+                )
+            except (PublicationError, RuntimeCapabilityError) as error:
+                self._events.put(("error", (str(error), write_failure_log(error))))
+            except Exception as error:
+                self._events.put(
+                    (
+                        "error",
+                        (
+                            "MusicDNA could not publish pending results. Please try again.",
+                            write_failure_log(error),
+                        ),
+                    )
+                )
+            else:
+                self._events.put(("publication_success", result))
 
         def _on_close_request(self) -> None:
             if can_close_launcher(self._running):
@@ -251,6 +357,8 @@ if tk is not None:
                         self._finish_with_error(*value)
                     elif event == "success":
                         self._finish_with_success(value)
+                    elif event == "publication_success":
+                        self._finish_with_publication(value)
             except queue.Empty:
                 pass
             self.after(100, self._process_events)
@@ -258,29 +366,71 @@ if tk is not None:
         def _finish_with_error(self, message: str, log_path: Path) -> None:
             self._running = False
             self.start_button.configure(state="normal")
+            self.publish_button.configure(state="normal")
             self.status.set("MusicDNA could not finish the job.")
             self._append_progress(f"Error: {message}")
             log_message = f"Diagnostic log: {log_path}"
             self.result.set(log_message)
             self._append_progress(log_message)
+            self._refresh_publication_status()
             messagebox.showerror("MusicDNA", f"{message}\n\n{log_message}", parent=self)
+
+        def _set_workspace_controls(self, workspace_path: Path | None) -> None:
+            self._workspace_path = workspace_path
+            state = "normal" if workspace_path is not None else "disabled"
+            self.report_folder_button.configure(state=state)
+            self.report_button.configure(state=state)
+            self.copy_report_path_button.configure(state=state)
+
+        def open_report_folder(self) -> None:
+            if self._workspace_path is not None:
+                open_report(self._workspace_path)
+
+        def open_workspace_report(self) -> None:
+            if self._workspace_path is not None:
+                open_report(self._workspace_path / "summary.md")
+
+        def copy_workspace_path(self) -> None:
+            if self._workspace_path is not None:
+                copy_report_path(self, self._workspace_path)
+                self.status.set("Report path copied.")
 
         def _finish_with_success(self, result: IngestionResult) -> None:
             self._running = False
             self.start_button.configure(state="normal")
-            self.status.set("Completed.")
+            self.publish_button.configure(state="normal")
+            self.status.set("Analysis complete")
+            self._refresh_publication_status()
+            self._set_workspace_controls(result.workspace_path)
             if result.report_path is None:
                 self.result.set("No new report was created because this item is already known.")
                 self._append_progress(self.result.get())
                 return
 
-            self.result.set(f"Report saved to: {result.report_path}")
+            if result.workspace_path is not None:
+                self.result.set(f"Report workspace: {result.workspace_path}")
+            else:
+                self.result.set(f"Report saved to: {result.report_path}")
             self._append_progress(self.result.get())
             try:
-                open_report(result.report_path)
+                open_report(result.workspace_path / "summary.md" if result.workspace_path else result.report_path)
             except OSError:
                 self._append_progress("The report was saved, but Windows could not open it automatically.")
             messagebox.showinfo("MusicDNA", self.result.get(), parent=self)
+
+        def _finish_with_publication(self, result: Any) -> None:
+            self._running = False
+            self.start_button.configure(state="normal")
+            self.publish_button.configure(state="normal")
+            self._refresh_publication_status()
+            self.result.set(
+                f"Published: {len(result.published)}. Already published: {len(result.already_published)}."
+            )
+            self.status.set("Publication completed." if not result.has_failures else "Publication needs attention.")
+            self._append_progress(self.result.get())
+
+        def _refresh_publication_status(self) -> None:
+            self.publication.set(publication_status_label())
 
 else:
 
