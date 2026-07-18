@@ -65,6 +65,18 @@ def ingestion_state_path() -> Path:
     return data_root() / "ingestion" / "state.json"
 
 
+def publication_config_path() -> Path:
+    return data_root() / "publication" / "config.json"
+
+
+def publication_state_path() -> Path:
+    return data_root() / "publication" / "state.json"
+
+
+def publication_workspace_directory() -> Path:
+    return data_root() / "publication" / "MusicDNA-Research"
+
+
 def ensure_directory(directory: Path) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
     return directory
