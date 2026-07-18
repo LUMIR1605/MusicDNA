@@ -19,13 +19,13 @@ def valid_payload(rhythm):
         "spectrum": {},
         "pitch": {},
         "melody": {},
-        "structure": {},
+        "structure": [{"type": "INTRO", "start": 0.0, "end": 1.0}],
         "harmony": {},
         "emotion": {},
-        "journey": {},
-        "curve": {},
+        "journey": [{"start": 0.0, "end": 1.0, "emotion": "Calm"}],
+        "curve": [{"start": 0.0, "end": 1.0, "score": 50}],
         "production": {},
-        "rules": {},
+        "rules": ["A representative rule."],
     }
 
 
@@ -34,21 +34,130 @@ def stub_builder_dependencies(monkeypatch, rhythm):
     monkeypatch.setattr(dna_builder, "energy_analyze", lambda _: [1.0, 2.0])
     monkeypatch.setattr(dna_builder, "rhythm_analyze", lambda _: rhythm)
     monkeypatch.setattr(dna_builder, "spectrum_analyze", lambda _: {})
-    monkeypatch.setattr(dna_builder, "structure_analyze", lambda _: {})
+    monkeypatch.setattr(
+        dna_builder,
+        "structure_analyze",
+        lambda _: [{"type": "INTRO", "start": 0.0, "end": 1.0}],
+    )
     monkeypatch.setattr(dna_builder, "analyze_pitch", lambda _: {})
     monkeypatch.setattr(dna_builder, "melody_analyze", lambda _: [])
     monkeypatch.setattr(dna_builder, "harmony_analyze", lambda _: {})
     monkeypatch.setattr(dna_builder, "emotion_analyze", lambda _: {})
-    monkeypatch.setattr(dna_builder, "journey_analyze", lambda _: {})
+    monkeypatch.setattr(
+        dna_builder,
+        "journey_analyze",
+        lambda _: [{"start": 0.0, "end": 1.0, "emotion": "Calm"}],
+    )
     monkeypatch.setattr(dna_builder, "production_analyze", lambda _: {})
-    monkeypatch.setattr(dna_builder, "curve_analyze", lambda _: {})
-    monkeypatch.setattr(dna_builder, "rules_analyze", lambda _: {})
+    monkeypatch.setattr(dna_builder, "curve_analyze", lambda _: [{"start": 0.0, "end": 1.0, "score": 50}])
+    monkeypatch.setattr(dna_builder, "rules_analyze", lambda _: ["A representative rule."])
     monkeypatch.setattr(dna_builder, "knowledge_analyze", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(dna_builder, "save_dna", lambda *_args, **_kwargs: Path("fixture.json"))
 
 
 def test_canonical_schema_accepts_valid_payload(valid_rhythm):
     validate_dna(valid_payload(valid_rhythm))
+
+
+def test_canonical_schema_accepts_curve_list(valid_rhythm):
+    payload = valid_payload(valid_rhythm)
+    payload["curve"] = [
+        {"start": 0.0, "end": 1.5, "score": 42},
+        {"start": 1.5, "end": 3.0, "score": 84},
+    ]
+
+    validate_dna(payload)
+
+
+@pytest.mark.parametrize("missing_field", ["start", "end", "score"])
+def test_canonical_schema_rejects_curve_entry_missing_required_field(valid_rhythm, missing_field):
+    payload = valid_payload(valid_rhythm)
+    payload["curve"] = [{"start": 0.0, "end": 1.0, "score": 50}]
+    payload["curve"][0].pop(missing_field)
+
+    with pytest.raises(DNASchemaValidationError, match="curve"):
+        validate_dna(payload)
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid_value"),
+    [("start", "zero"), ("end", "one"), ("score", "high")],
+)
+def test_canonical_schema_rejects_curve_entry_with_wrong_field_type(
+    valid_rhythm, field, invalid_value
+):
+    payload = valid_payload(valid_rhythm)
+    payload["curve"][0][field] = invalid_value
+
+    with pytest.raises(DNASchemaValidationError, match="curve"):
+        validate_dna(payload)
+
+
+def test_canonical_schema_rejects_curve_object_instead_of_array(valid_rhythm):
+    payload = valid_payload(valid_rhythm)
+    payload["curve"] = {"start": 0.0, "end": 1.0, "score": 50}
+
+    with pytest.raises(DNASchemaValidationError, match="curve"):
+        validate_dna(payload)
+
+
+def test_canonical_schema_accepts_runtime_structure_journey_and_rules_lists(valid_rhythm):
+    validate_dna(valid_payload(valid_rhythm))
+
+
+@pytest.mark.parametrize(
+    ("field", "entry"),
+    [
+        ("structure", {"type": "INTRO", "start": 0.0}),
+        ("journey", {"start": 0.0, "end": 1.0}),
+    ],
+)
+def test_canonical_schema_rejects_array_entry_missing_required_field(valid_rhythm, field, entry):
+    payload = valid_payload(valid_rhythm)
+    payload[field] = [entry]
+
+    with pytest.raises(DNASchemaValidationError, match=field):
+        validate_dna(payload)
+
+
+@pytest.mark.parametrize(
+    ("field", "entry"),
+    [
+        ("structure", {"type": "INTRO", "start": "zero", "end": 1.0}),
+        ("journey", {"start": 0.0, "end": 1.0, "emotion": 1}),
+    ],
+)
+def test_canonical_schema_rejects_array_entry_with_wrong_field_type(
+    valid_rhythm, field, entry
+):
+    payload = valid_payload(valid_rhythm)
+    payload[field] = [entry]
+
+    with pytest.raises(DNASchemaValidationError, match=field):
+        validate_dna(payload)
+
+
+@pytest.mark.parametrize(
+    ("field", "entry"),
+    [
+        ("structure", {"type": "INTRO", "start": 0.0, "end": 1.0, "extra": True}),
+        ("journey", {"start": 0.0, "end": 1.0, "emotion": "Calm", "extra": True}),
+    ],
+)
+def test_canonical_schema_rejects_extra_array_entry_fields(valid_rhythm, field, entry):
+    payload = valid_payload(valid_rhythm)
+    payload[field] = [entry]
+
+    with pytest.raises(DNASchemaValidationError, match=field):
+        validate_dna(payload)
+
+
+def test_canonical_schema_rejects_non_string_rule_entry(valid_rhythm):
+    payload = valid_payload(valid_rhythm)
+    payload["rules"] = [{"text": "A rule"}]
+
+    with pytest.raises(DNASchemaValidationError, match="rules"):
+        validate_dna(payload)
 
 
 def test_canonical_schema_rejects_missing_rhythm_contract(valid_rhythm):

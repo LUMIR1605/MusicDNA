@@ -58,13 +58,52 @@
     "spectrum": {"type": "object"},
     "pitch": {"type": "object"},
     "melody": {"type": "object"},
-    "structure": {"type": "object"},
+    "structure": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "start", "end"],
+        "properties": {
+          "type": {"type": "string"},
+          "start": {"type": "number"},
+          "end": {"type": "number"}
+        }
+      }
+    },
     "harmony": {"type": "object"},
     "emotion": {"type": "object"},
-    "journey": {"type": "object"},
-    "curve": {"type": "object"},
+    "journey": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["start", "end", "emotion"],
+        "properties": {
+          "start": {"type": "number"},
+          "end": {"type": "number"},
+          "emotion": {"type": "string"}
+        }
+      }
+    },
+    "curve": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["start", "end", "score"],
+        "properties": {
+          "start": {"type": "number"},
+          "end": {"type": "number"},
+          "score": {"type": "number"}
+        }
+      }
+    },
     "production": {"type": "object"},
-    "rules": {"type": "object"}
+    "rules": {
+      "type": "array",
+      "items": {"type": "string"}
+    }
   },
   "$defs": {
     "position_measurement": {

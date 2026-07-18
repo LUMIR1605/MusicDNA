@@ -41,7 +41,7 @@ def analyze(dna):
 
     for c in curve:
 
-        bar = "█" * (c["score"] // 5)
+        bar = "#" * (c["score"] // 5)
 
         print(
             f'{c["start"]:6.1f}s {c["score"]:3d} {bar}'

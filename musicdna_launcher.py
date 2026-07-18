@@ -6,12 +6,15 @@ import os
 import queue
 import sys
 import threading
+import traceback
 import webbrowser
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from core.ingestion import IngestionError, IngestionResult
 from core.launcher_service import run_add, validate_add_url
+from core.paths import data_root, ensure_directory
 from core.runtime import RuntimeCapabilityError
 
 try:
@@ -37,6 +40,51 @@ def can_close_launcher(job_running: bool, cancellation_confirmed: bool = False) 
     """Return whether the launcher can close without silently interrupting a job."""
 
     return not job_running or cancellation_confirmed
+
+
+def diagnostic_log_path() -> Path:
+    """Return the local, cross-platform path for launcher diagnostic logs."""
+
+    return data_root() / "logs" / "launcher-errors.log"
+
+
+def _root_cause(error: BaseException) -> BaseException:
+    cause = error
+    while cause.__cause__ is not None:
+        cause = cause.__cause__
+    return cause
+
+
+def write_failure_log(error: BaseException) -> Path:
+    """Append a complete exception chain without changing the user-facing error."""
+
+    root = _root_cause(error)
+    frames = traceback.extract_tb(root.__traceback__)
+    failing_frame = frames[-1] if frames else None
+    log_path = diagnostic_log_path()
+    ensure_directory(log_path.parent)
+
+    lines = [
+        "MusicDNA launcher diagnostic",
+        f"Timestamp (UTC): {datetime.now(timezone.utc).isoformat()}",
+        f"Exception type: {type(root).__name__}",
+        f"Exception message: {root}",
+    ]
+    if failing_frame is not None:
+        lines.extend(
+            [
+                f"Failing module: {failing_frame.filename}",
+                f"Failing function: {failing_frame.name}",
+                f"Failing line number: {failing_frame.lineno}",
+            ]
+        )
+    else:
+        lines.append("Failing location: unavailable")
+
+    lines.extend(["", "Full traceback:", "".join(traceback.format_exception(error)), "=" * 80, ""])
+    with log_path.open("a", encoding="utf-8") as log_file:
+        log_file.write("\n".join(lines))
+    return log_path
 
 
 if tk is not None:
@@ -160,9 +208,17 @@ if tk is not None:
             try:
                 result = run_add(url, lambda message: self._events.put(("progress", message)))
             except (IngestionError, RuntimeCapabilityError) as error:
-                self._events.put(("error", str(error)))
-            except Exception:
-                self._events.put(("error", "MusicDNA could not finish this job. Please try again."))
+                self._events.put(("error", (str(error), write_failure_log(error))))
+            except Exception as error:
+                self._events.put(
+                    (
+                        "error",
+                        (
+                            "MusicDNA could not finish this job. Please try again.",
+                            write_failure_log(error),
+                        ),
+                    )
+                )
             else:
                 self._events.put(("success", result))
 
@@ -192,19 +248,22 @@ if tk is not None:
                         self.status.set(str(value))
                         self._append_progress(str(value))
                     elif event == "error":
-                        self._finish_with_error(str(value))
+                        self._finish_with_error(*value)
                     elif event == "success":
                         self._finish_with_success(value)
             except queue.Empty:
                 pass
             self.after(100, self._process_events)
 
-        def _finish_with_error(self, message: str) -> None:
+        def _finish_with_error(self, message: str, log_path: Path) -> None:
             self._running = False
             self.start_button.configure(state="normal")
             self.status.set("MusicDNA could not finish the job.")
             self._append_progress(f"Error: {message}")
-            messagebox.showerror("MusicDNA", message, parent=self)
+            log_message = f"Diagnostic log: {log_path}"
+            self.result.set(log_message)
+            self._append_progress(log_message)
+            messagebox.showerror("MusicDNA", f"{message}\n\n{log_message}", parent=self)
 
         def _finish_with_success(self, result: IngestionResult) -> None:
             self._running = False

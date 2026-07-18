@@ -5,6 +5,33 @@ from pathlib import Path
 import musicdna_launcher
 
 
+def _raise_chained_failure() -> None:
+    try:
+        raise ValueError("schema value is invalid")
+    except ValueError as error:
+        raise RuntimeError("analysis did not complete") from error
+
+
+def test_failure_log_preserves_root_exception_and_location(monkeypatch, tmp_path: Path):
+    log_path = tmp_path / "logs" / "launcher-errors.log"
+    monkeypatch.setattr(musicdna_launcher, "diagnostic_log_path", lambda: log_path)
+
+    try:
+        _raise_chained_failure()
+    except RuntimeError as error:
+        written_log = musicdna_launcher.write_failure_log(error)
+
+    content = written_log.read_text(encoding="utf-8")
+    assert written_log == log_path
+    assert "Exception type: ValueError" in content
+    assert "Failing module:" in content
+    assert "Failing function: _raise_chained_failure" in content
+    assert "Failing line number:" in content
+    assert "Full traceback:" in content
+    assert "RuntimeError: analysis did not complete" in content
+    assert "ValueError: schema value is invalid" in content
+
+
 def test_close_decision_allows_idle_launcher_to_close():
     assert musicdna_launcher.can_close_launcher(job_running=False)
 
