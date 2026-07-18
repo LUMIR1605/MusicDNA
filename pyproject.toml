@@ -16,8 +16,11 @@ dependencies = [
 [project.scripts]
 musicdna = "musicdna:main"
 
+[project.gui-scripts]
+musicdna-launcher = "musicdna_launcher:main"
+
 [tool.setuptools]
-py-modules = ["musicdna"]
+py-modules = ["musicdna", "musicdna_launcher"]
 
 [tool.setuptools.packages.find]
 include = ["brain*", "collectors*", "core*", "database*", "discovery*", "engines*", "schema*"]

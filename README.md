@@ -10,6 +10,10 @@ musicdna add "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
 Use `python musicdna.py add "<url>"` when the local command entry point has not been installed yet.
 
+## Windows desktop launcher
+
+After normal setup, double-click `START_MUSICDNA.pyw` to open the MusicDNA desktop launcher without a terminal. `START_MUSICDNA.bat` is also provided for Windows systems where the Python file association is unavailable. See `TASK-004_USAGE.md` for setup and desktop shortcut instructions.
+
 ## Historical note
 
 The Lumir OS text below is retained as historical repository context. It is not MusicDNA setup or operating guidance.
