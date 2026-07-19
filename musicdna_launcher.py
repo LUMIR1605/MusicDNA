@@ -16,6 +16,7 @@ from core.ingestion import IngestionError, IngestionResult
 from core.launcher_service import run_add, validate_add_url
 from core.paths import data_root, ensure_directory
 from core.publication import PublicationError, publication_status_label, publish_pending_results
+from core.report_workspace import is_valid_report_workspace
 from core.runtime import RuntimeCapabilityError
 
 try:
@@ -35,6 +36,20 @@ def open_report(report_path: Path) -> None:
         os.startfile(str(path))
         return
     webbrowser.open(path.as_uri())
+
+
+def copy_report_path(root: tk.Misc, report_path: Path) -> None:
+    """Put a completed report-workspace path on the desktop clipboard."""
+
+    root.clipboard_clear()
+    root.clipboard_append(str(Path(report_path).resolve()))
+    root.update()
+
+
+def has_valid_report_workspace(workspace_path: Path | None) -> bool:
+    """Return whether a workspace still contains all required report artifacts."""
+
+    return is_valid_report_workspace(workspace_path)
 
 
 def can_close_launcher(job_running: bool, cancellation_confirmed: bool = False) -> bool:
@@ -96,13 +111,14 @@ if tk is not None:
         def __init__(self) -> None:
             super().__init__()
             self.title("MusicDNA")
-            self.geometry("640x480")
-            self.minsize(560, 410)
+            self.geometry("640x560")
+            self.minsize(560, 480)
             self.configure(padx=24, pady=22, bg="#101820")
 
             self._events: queue.Queue[tuple[str, Any]] = queue.Queue()
             self._running = False
             self._closing = False
+            self._workspace_path: Path | None = None
             self.url = tk.StringVar()
             self.status = tk.StringVar(value="Paste one YouTube video link to begin.")
             self.result = tk.StringVar(value="")
@@ -192,6 +208,46 @@ if tk is not None:
                 justify="left",
             ).pack(anchor="w", pady=(4, 8))
 
+            self.report_folder_button = tk.Button(
+                self,
+                text="OPEN REPORT FOLDER",
+                command=self.open_report_folder,
+                state="disabled",
+                font=("Segoe UI", 9, "bold"),
+                bg="#27485a",
+                fg="#e8f4ff",
+                relief="flat",
+                padx=12,
+                pady=5,
+            )
+            self.report_folder_button.pack(anchor="w")
+            self.report_button = tk.Button(
+                self,
+                text="OPEN REPORT",
+                command=self.open_workspace_report,
+                state="disabled",
+                font=("Segoe UI", 9, "bold"),
+                bg="#27485a",
+                fg="#e8f4ff",
+                relief="flat",
+                padx=12,
+                pady=5,
+            )
+            self.report_button.pack(anchor="w", pady=(4, 0))
+            self.copy_report_path_button = tk.Button(
+                self,
+                text="COPY REPORT PATH",
+                command=self.copy_workspace_path,
+                state="disabled",
+                font=("Segoe UI", 9, "bold"),
+                bg="#27485a",
+                fg="#e8f4ff",
+                relief="flat",
+                padx=12,
+                pady=5,
+            )
+            self.copy_report_path_button.pack(anchor="w", pady=(4, 10))
+
             self.progress = scrolledtext.ScrolledText(
                 self,
                 height=10,
@@ -224,6 +280,7 @@ if tk is not None:
             self._running = True
             self.start_button.configure(state="disabled")
             self.publish_button.configure(state="disabled")
+            self._set_workspace_controls(None)
             self.result.set("")
             self.status.set("Starting MusicDNA...")
             self._append_progress("Starting MusicDNA...")
@@ -325,21 +382,64 @@ if tk is not None:
             self._refresh_publication_status()
             messagebox.showerror("MusicDNA", f"{message}\n\n{log_message}", parent=self)
 
+        def _set_workspace_controls(self, workspace_path: Path | None) -> None:
+            self._workspace_path = workspace_path if has_valid_report_workspace(workspace_path) else None
+            state = "normal" if self._workspace_path is not None else "disabled"
+            self.report_folder_button.configure(state=state)
+            self.report_button.configure(state=state)
+            self.copy_report_path_button.configure(state=state)
+
+        def open_report_folder(self) -> None:
+            if not has_valid_report_workspace(self._workspace_path):
+                self._set_workspace_controls(None)
+                self.status.set("Report workspace is unavailable.")
+                return
+            try:
+                open_report(self._workspace_path)
+            except OSError:
+                self.status.set("Windows could not open the report folder.")
+
+        def open_workspace_report(self) -> None:
+            if not has_valid_report_workspace(self._workspace_path):
+                self._set_workspace_controls(None)
+                self.status.set("Report workspace is unavailable.")
+                return
+            try:
+                open_report(self._workspace_path / "summary.md")
+            except OSError:
+                self.status.set("Windows could not open the report.")
+
+        def copy_workspace_path(self) -> None:
+            if has_valid_report_workspace(self._workspace_path):
+                try:
+                    copy_report_path(self, self._workspace_path)
+                except (OSError, tk.TclError):
+                    self.status.set("Windows could not copy the report path.")
+                    return
+                self.status.set("Report path copied.")
+            else:
+                self._set_workspace_controls(None)
+                self.status.set("Report workspace is unavailable.")
+
         def _finish_with_success(self, result: IngestionResult) -> None:
             self._running = False
             self.start_button.configure(state="normal")
             self.publish_button.configure(state="normal")
-            self.status.set("Completed.")
+            self.status.set("Analysis complete")
             self._refresh_publication_status()
+            self._set_workspace_controls(result.workspace_path)
             if result.report_path is None:
                 self.result.set("No new report was created because this item is already known.")
                 self._append_progress(self.result.get())
                 return
 
-            self.result.set(f"Report saved to: {result.report_path}")
+            if result.workspace_path is not None:
+                self.result.set(f"Report workspace: {result.workspace_path}")
+            else:
+                self.result.set(f"Report saved to: {result.report_path}")
             self._append_progress(self.result.get())
             try:
-                open_report(result.report_path)
+                open_report(result.workspace_path / "summary.md" if result.workspace_path else result.report_path)
             except OSError:
                 self._append_progress("The report was saved, but Windows could not open it automatically.")
             messagebox.showinfo("MusicDNA", self.result.get(), parent=self)

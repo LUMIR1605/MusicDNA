@@ -20,6 +20,7 @@ from core.paths import (
     write_text_atomic,
 )
 from core.publication import PublicationError, publish_pending_results
+from core.report_workspace import ReportWorkspaceError, create_report_workspace
 from core.runtime import require_binary, require_ingestion_capabilities
 from engines.dna_builder import build as build_dna
 
@@ -40,6 +41,7 @@ class IngestionResult:
     sample_path: Path | None
     dna_path: Path | None
     report_path: Path | None
+    workspace_path: Path | None = None
 
 
 def validate_youtube_url(url: str) -> str:
@@ -224,6 +226,29 @@ def _publish_completed_analyses(progress: Callable[[str], None]) -> None:
         progress("Publication completed.")
 
 
+def _create_report_workspace(
+    video_id: str,
+    metadata: dict[str, Any],
+    dna_path: Path,
+    progress: Callable[[str], None],
+) -> Path | None:
+    """Create a desktop copy without invalidating completed local analysis data."""
+
+    try:
+        dna = json.loads(dna_path.read_text(encoding="utf-8"))
+        if not isinstance(dna, dict):
+            raise ReportWorkspaceError("The completed DNA artifact is unreadable.")
+        workspace = create_report_workspace(video_id, metadata, dna)
+    except ReportWorkspaceError as error:
+        progress(f"Desktop report workspace was not updated: {error} Local analysis remains available.")
+        return None
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        progress("Desktop report workspace could not be created. Local analysis remains available.")
+        return None
+    progress(f"Desktop report workspace: {workspace.directory}")
+    return workspace.directory
+
+
 def ingest(url: str, progress: Callable[[str], None] = print) -> IngestionResult:
     """Run validation, download, analysis, persistence, and short reporting."""
 
@@ -237,8 +262,22 @@ def ingest(url: str, progress: Callable[[str], None] = print) -> IngestionResult
         completed = _existing_completed_result(existing)
         if completed:
             progress("Duplicate detected: this video has already been processed.")
+            workspace_path = _create_report_workspace(
+                completed.video_id,
+                existing["metadata"],
+                completed.dna_path,
+                progress,
+            )
             _publish_completed_analyses(progress)
-            return completed
+            return IngestionResult(
+                completed.video_id,
+                completed.status,
+                completed.title,
+                completed.sample_path,
+                completed.dna_path,
+                completed.report_path,
+                workspace_path,
+            )
 
     metadata = existing.get("metadata") if existing else None
     if not metadata:
@@ -303,5 +342,14 @@ def ingest(url: str, progress: Callable[[str], None] = print) -> IngestionResult
     record.pop("error", None)
     _save_state(state_path, state)
     progress("Completed.")
+    workspace_path = _create_report_workspace(video_id, metadata, dna_path, progress)
     _publish_completed_analyses(progress)
-    return IngestionResult(video_id, "completed", metadata["title"], sample_path, dna_path, report_path)
+    return IngestionResult(
+        video_id,
+        "completed",
+        metadata["title"],
+        sample_path,
+        dna_path,
+        report_path,
+        workspace_path,
+    )
