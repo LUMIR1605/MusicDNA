@@ -42,7 +42,15 @@ def configure_pipeline(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(ingestion, "samples_directory", lambda: samples)
     monkeypatch.setattr(ingestion, "reports_directory", lambda: reports)
     monkeypatch.setattr(ingestion, "publish_pending_results", lambda _progress: PublicationResult())
-    return state, samples, reports
+    workspace = tmp_path / "Desktop" / "MusicDNA Reports" / f"{VIDEO_ID}_Example_Song_Test"
+    calls: list[str] = []
+
+    def create_workspace(video_id, _metadata, _dna_path, _progress):
+        calls.append(video_id)
+        return workspace
+
+    monkeypatch.setattr(ingestion, "_create_report_workspace", create_workspace)
+    return state, samples, reports, workspace, calls
 
 
 def test_validate_youtube_url_supports_video_forms_and_rejects_invalid_values():
@@ -60,7 +68,7 @@ def test_safe_filename_removes_portability_hazards():
 
 
 def test_ingest_runs_download_analysis_persistence_and_summary(monkeypatch, tmp_path: Path):
-    state, samples, reports = configure_pipeline(monkeypatch, tmp_path)
+    state, samples, reports, workspace, calls = configure_pipeline(monkeypatch, tmp_path)
     monkeypatch.setattr(ingestion, "inspect_video", lambda *_args: metadata())
 
     def download(_url, info, destination):
@@ -88,6 +96,8 @@ def test_ingest_runs_download_analysis_persistence_and_summary(monkeypatch, tmp_
     assert result.sample_path == samples / f"{VIDEO_ID}_example.wav"
     assert result.dna_path and result.dna_path.exists()
     assert result.report_path == reports / f"{VIDEO_ID}_summary.txt"
+    assert result.workspace_path == workspace
+    assert calls == [VIDEO_ID]
     assert "Estimated BPM: 120.0" in result.report_path.read_text(encoding="utf-8")
     assert progress == [
         "Reading YouTube metadata...",
@@ -101,7 +111,7 @@ def test_ingest_runs_download_analysis_persistence_and_summary(monkeypatch, tmp_
 
 
 def test_completed_video_is_detected_without_network_or_reanalysis(monkeypatch, tmp_path: Path):
-    configure_pipeline(monkeypatch, tmp_path)
+    _state, _samples, _reports, workspace, calls = configure_pipeline(monkeypatch, tmp_path)
     monkeypatch.setattr(ingestion, "inspect_video", lambda *_args: metadata())
 
     def download(_url, info, destination):
@@ -125,6 +135,8 @@ def test_completed_video_is_detected_without_network_or_reanalysis(monkeypatch, 
     result = ingestion.ingest(URL, lambda _message: None)
 
     assert result.status == "duplicate"
+    assert result.workspace_path == workspace
+    assert calls == [VIDEO_ID, VIDEO_ID]
 
 
 def test_completed_analysis_publication_failure_does_not_invalidate_local_result(monkeypatch, tmp_path: Path):
@@ -154,8 +166,71 @@ def test_completed_analysis_publication_failure_does_not_invalidate_local_result
     assert result.report_path and result.report_path.exists()
 
 
+def test_workspace_failure_does_not_invalidate_completed_local_result(monkeypatch, tmp_path: Path):
+    _state, samples, reports, _workspace, _calls = configure_pipeline(monkeypatch, tmp_path)
+    monkeypatch.setattr(ingestion, "inspect_video", lambda *_args: metadata())
+
+    def download(_url, info, destination):
+        destination.mkdir(parents=True, exist_ok=True)
+        sample = destination / f"{info['id']}_workspace-failure.wav"
+        sample.write_bytes(b"audio")
+        return sample
+
+    def build(*_args, **_kwargs):
+        dna_path = tmp_path / "dna" / "workspace-failure.json"
+        dna_path.parent.mkdir(parents=True, exist_ok=True)
+        dna_path.write_text(json.dumps(dna_payload()), encoding="utf-8")
+        return dna_payload(), dna_path
+
+    monkeypatch.setattr(ingestion, "download_audio", download)
+    monkeypatch.setattr(ingestion, "build_dna", build)
+    monkeypatch.setattr(ingestion, "_create_report_workspace", lambda *_args: None)
+
+    result = ingestion.ingest(URL, lambda _message: None)
+
+    assert result.status == "completed"
+    assert result.workspace_path is None
+    assert result.report_path == reports / f"{VIDEO_ID}_summary.txt"
+    assert result.report_path.exists()
+
+
+def test_workspace_rejection_keeps_local_completion_and_runs_publication(monkeypatch, tmp_path: Path):
+    _state, samples, reports, _workspace, _calls = configure_pipeline(monkeypatch, tmp_path)
+    published: list[str] = []
+    monkeypatch.setattr(ingestion, "inspect_video", lambda *_args: metadata())
+
+    def download(_url, info, destination):
+        destination.mkdir(parents=True, exist_ok=True)
+        sample = destination / f"{info['id']}_workspace-rejected.wav"
+        sample.write_bytes(b"audio")
+        return sample
+
+    def build(*_args, **_kwargs):
+        dna_path = tmp_path / "dna" / "workspace-rejected.json"
+        dna_path.parent.mkdir(parents=True, exist_ok=True)
+        dna_path.write_text(json.dumps(dna_payload()), encoding="utf-8")
+        return dna_payload(), dna_path
+
+    monkeypatch.setattr(ingestion, "download_audio", download)
+    monkeypatch.setattr(ingestion, "build_dna", build)
+    monkeypatch.setattr(ingestion, "_create_report_workspace", lambda *_args: None)
+    monkeypatch.setattr(
+        ingestion,
+        "publish_pending_results",
+        lambda _progress: published.append("called") or PublicationResult(),
+    )
+
+    result = ingestion.ingest(URL, lambda _message: None)
+
+    assert result.status == "completed"
+    assert result.workspace_path is None
+    assert result.report_path == reports / f"{VIDEO_ID}_summary.txt"
+    assert result.report_path.exists()
+    assert published == ["called"]
+
+
 def test_downloaded_state_resumes_analysis_without_downloading(monkeypatch, tmp_path: Path):
-    state, samples, _reports = configure_pipeline(monkeypatch, tmp_path)
+    state, samples, _reports, _workspace, _calls = configure_pipeline(monkeypatch, tmp_path)
     sample = samples / "resume.wav"
     sample.parent.mkdir(parents=True, exist_ok=True)
     sample.write_bytes(b"audio")
@@ -191,7 +266,7 @@ def test_downloaded_state_resumes_analysis_without_downloading(monkeypatch, tmp_
 
 
 def test_content_duplicate_is_not_analyzed_twice(monkeypatch, tmp_path: Path):
-    state, samples, reports = configure_pipeline(monkeypatch, tmp_path)
+    state, samples, reports, _workspace, _calls = configure_pipeline(monkeypatch, tmp_path)
     original_id = "AAAAAAAAAAA"
     original_sample = samples / "original.wav"
     original_dna = tmp_path / "dna" / "original.json"

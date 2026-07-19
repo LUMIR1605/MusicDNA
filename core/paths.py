@@ -61,6 +61,57 @@ def reports_directory() -> Path:
     return data_root() / "reports"
 
 
+def _windows_desktop_from_registry() -> Path | None:
+    """Return the configured Windows Desktop known folder, including redirection."""
+
+    try:
+        import winreg
+
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders",
+        ) as key:
+            value, _ = winreg.QueryValueEx(key, "Desktop")
+    except (ImportError, OSError):
+        return None
+    if not isinstance(value, str) or not value.strip():
+        return None
+    expanded = os.path.expandvars(value)
+    return Path(expanded) if expanded != value or "%" not in value else None
+
+
+def desktop_directory(
+    environ: Mapping[str, str] | None = None,
+    home: Path | None = None,
+    platform_name: str | None = None,
+) -> Path:
+    """Return the user's conventional Desktop directory without creating it."""
+
+    environment = os.environ if environ is None else environ
+    user_home = Path.home() if home is None else Path(home)
+    system = sys.platform if platform_name is None else platform_name
+    if system.startswith("win"):
+        redirected = _windows_desktop_from_registry() if environ is None else None
+        if redirected is not None:
+            return redirected
+        profile = environment.get("USERPROFILE")
+        return (Path(profile) if profile else user_home) / "Desktop"
+    return user_home / "Desktop"
+
+
+def desktop_reports_directory(
+    desktop: Path | None = None,
+    fallback_root: Path | None = None,
+) -> Path:
+    """Return the report-workspace root, with a safe local fallback if Desktop is absent."""
+
+    candidate = desktop_directory() if desktop is None else Path(desktop)
+    if candidate.is_dir():
+        return candidate / "MusicDNA Reports"
+    base = data_root() if fallback_root is None else Path(fallback_root)
+    return base / "reports-workspace"
+
+
 def ingestion_state_path() -> Path:
     return data_root() / "ingestion" / "state.json"
 
