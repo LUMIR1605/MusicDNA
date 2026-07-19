@@ -143,6 +143,83 @@ def test_workspace_rejects_private_dna_or_arbitrary_metadata_paths(tmp_path: Pat
     assert package["metadata"]["uploader"] == ""
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("source_file", r"C:\\Users\\private.wav"),
+        ("filepath", "C:/Users/private.wav"),
+        ("network", r"\\\\server\\share\\private.wav"),
+        ("output_directory", r"C:\\MusicDNA\\output"),
+        ("archive", "/home/musicdna/private.wav"),
+        ("termux", "/data/data/com.termux/files/home/private.wav"),
+        ("device", "/storage/emulated/0/MusicDNA/private.wav"),
+        ("uri", "file:///C:/Users/private.wav"),
+        ("access_token", "secret-token"),
+        ("api_key", "secret-key"),
+        ("access_key", "secret-key"),
+        ("password", "secret-password"),
+        ("SeCrEt", "secret-value"),
+        ("ACCESS_TOKEN", "secret-token"),
+    ],
+)
+def test_workspace_rejects_nested_operational_fields_and_local_paths(
+    tmp_path: Path, field: str, value: str
+):
+    dna = {**_dna(), "nested": {field: value}}
+
+    with pytest.raises(ReportWorkspaceError, match="private local data"):
+        create_report_workspace(VIDEO_ID, _metadata(), dna, workspace_root=tmp_path / "reports")
+
+
+def test_workspace_allows_https_urls_and_ordinary_analytical_strings(tmp_path: Path):
+    dna = {
+        **_dna(),
+        "references": {
+            "documentation_url": "https://example.com/musicdna",
+            "reference_url": "http://example.com/musicdna",
+            "description": "Warm chorus with a bright analytical profile.",
+        },
+    }
+
+    workspace = create_report_workspace(VIDEO_ID, _metadata(), dna, workspace_root=tmp_path / "reports")
+
+    package = json.loads(workspace.package_path.read_text(encoding="utf-8"))
+    assert package["dna"]["references"]["documentation_url"] == "https://example.com/musicdna"
+    assert package["dna"]["references"]["reference_url"] == "http://example.com/musicdna"
+
+
+def test_workspace_rejects_filename_in_local_artifact_context(tmp_path: Path):
+    dna = {**_dna(), "source": {"filename": "private.wav"}}
+
+    with pytest.raises(ReportWorkspaceError, match="private local data"):
+        create_report_workspace(VIDEO_ID, _metadata(), dna, workspace_root=tmp_path / "reports")
+
+
+def test_workspace_rejects_source_url_for_another_video(tmp_path: Path):
+    other_id = "AAAAAAAAAAA"
+    metadata = {**_metadata(), "webpage_url": f"https://www.youtube.com/watch?v={other_id}"}
+
+    with pytest.raises(ReportWorkspaceError, match="does not match its video ID"):
+        create_report_workspace(VIDEO_ID, metadata, _dna(), workspace_root=tmp_path / "reports")
+
+
+@pytest.mark.parametrize(
+    "source_url",
+    [
+        f"https://youtu.be/{VIDEO_ID}",
+        f"https://www.youtube.com/watch?v={VIDEO_ID}",
+        f"https://music.youtube.com/watch?v={VIDEO_ID}",
+        f"https://www.youtube.com/shorts/{VIDEO_ID}",
+    ],
+)
+def test_workspace_accepts_matching_youtube_source_urls(tmp_path: Path, source_url: str):
+    metadata = {**_metadata(), "webpage_url": source_url}
+
+    workspace = create_report_workspace(VIDEO_ID, metadata, _dna(), workspace_root=tmp_path / "reports")
+
+    assert workspace.metadata_path.exists()
+
+
 def test_unsafe_video_id_and_title_cannot_escape_workspace(tmp_path: Path):
     root = tmp_path / "Desktop" / "MusicDNA Reports"
     unsafe_metadata = {**_metadata(), "title": "../../outside\\report"}

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 from core.paths import desktop_reports_directory, ensure_directory, write_json_atomic, write_text_atomic
 
@@ -19,16 +20,39 @@ PACKAGE_VERSION = "musicdna-analysis-package-v1"
 PACKAGE_FILES = ("summary.md", "analysis_package.json", "metadata.json")
 PRIVATE_FIELD_NAMES = frozenset(
     {
-        "sample_path",
-        "dna_path",
-        "report_path",
-        "temp_path",
-        "log_path",
-        "local_path",
-        "credentials",
+        "path",
+        "filepath",
+        "sourcefile",
+        "sourcepath",
+        "outputpath",
+        "outputdirectory",
+        "directory",
+        "dir",
+        "cachepath",
+        "localpath",
+        "samplepath",
+        "dnapath",
+        "reportpath",
+        "temppath",
+        "logpath",
         "credential",
+        "credentials",
         "token",
+        "tokens",
+        "secret",
+        "secrets",
+        "password",
+        "apikey",
+        "accesstoken",
+        "accesskey",
     }
+)
+LOCAL_ARTIFACT_CONTEXT_KEYS = frozenset(
+    {"source", "output", "cache", "local", "temp", "log", "sample", "artifact", "file"}
+)
+LOCAL_PATH_PATTERN = re.compile(
+    r"^(?:[A-Za-z]:[\\/]|\\\\|/(?:home|data/data|storage/emulated)(?:/|$)|file://)",
+    re.IGNORECASE,
 )
 
 
@@ -111,6 +135,8 @@ def _safe_metadata(metadata: dict[str, Any], video_id: str) -> dict[str, Any]:
     source_url = metadata.get("webpage_url")
     if not isinstance(source_url, str) or not source_url:
         raise ReportWorkspaceError("The completed analysis has no source URL.")
+    if _youtube_video_id_from_url(source_url) != video_id:
+        raise ReportWorkspaceError("The completed analysis source URL does not match its video ID.")
     title = metadata.get("title")
     if not isinstance(title, str) or not title:
         raise ReportWorkspaceError("The completed analysis has no track title.")
@@ -125,17 +151,47 @@ def _safe_metadata(metadata: dict[str, Any], video_id: str) -> dict[str, Any]:
     }
 
 
-def _reject_private_dna_fields(value: Any) -> None:
+def _youtube_video_id_from_url(source_url: str) -> str | None:
+    parsed = urlparse(source_url)
+    if parsed.scheme not in {"http", "https"}:
+        return None
+    host = parsed.netloc.lower().split(":", 1)[0]
+    parts = [part for part in parsed.path.split("/") if part]
+    if host in {"youtu.be", "www.youtu.be"}:
+        return parts[0] if parts else None
+    if host not in {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com"}:
+        return None
+    if parsed.path == "/watch":
+        return parse_qs(parsed.query).get("v", [None])[0]
+    if len(parts) >= 2 and parts[0] in {"shorts", "embed", "live"}:
+        return parts[1]
+    return None
+
+
+def _normalized_key(key: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", key.lower())
+
+
+def _is_sensitive_dna_key(key: str, parent_key: str | None) -> bool:
+    normalized = _normalized_key(key)
+    if normalized in PRIVATE_FIELD_NAMES:
+        return True
+    return normalized == "filename" and parent_key in LOCAL_ARTIFACT_CONTEXT_KEYS
+
+
+def _reject_private_dna_fields(value: Any, parent_key: str | None = None) -> None:
     """Refuse a desktop export when a validated artifact carries local-only data."""
 
     if isinstance(value, dict):
         for key, item in value.items():
-            if isinstance(key, str) and key.lower() in PRIVATE_FIELD_NAMES:
+            if isinstance(key, str) and _is_sensitive_dna_key(key, parent_key):
                 raise ReportWorkspaceError("The completed DNA artifact contains private local data.")
-            _reject_private_dna_fields(item)
-    elif isinstance(value, list):
+            _reject_private_dna_fields(item, _normalized_key(key) if isinstance(key, str) else None)
+    elif isinstance(value, (list, tuple)):
         for item in value:
-            _reject_private_dna_fields(item)
+            _reject_private_dna_fields(item, parent_key)
+    elif isinstance(value, str) and LOCAL_PATH_PATTERN.match(value.strip()):
+        raise ReportWorkspaceError("The completed DNA artifact contains private local data.")
 
 
 def _summary_markdown(metadata: dict[str, Any], dna: dict[str, Any]) -> str:
