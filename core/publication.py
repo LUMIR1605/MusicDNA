@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-import subprocess
 import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -23,6 +22,7 @@ from core.paths import (
     write_text_atomic,
 )
 from core.runtime import RuntimeCapabilityError, require_publication_capabilities
+from core.subprocesses import run_process
 
 
 RESEARCH_REPOSITORY_URL = "https://github.com/LUMIR1605/MusicDNA-Research.git"
@@ -278,7 +278,7 @@ def _fingerprint(analysis: dict[str, Any], metadata: dict[str, Any], summary: st
 
 
 def _run_git(arguments: list[str], cwd: Path | None = None) -> str:
-    result = subprocess.run(
+    result = run_process(
         ["git", *arguments],
         cwd=cwd,
         capture_output=True,

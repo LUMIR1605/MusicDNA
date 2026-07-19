@@ -5,8 +5,6 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-import subprocess
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -22,6 +20,7 @@ from core.paths import (
 from core.publication import PublicationError, publish_pending_results
 from core.report_workspace import ReportWorkspaceError, create_report_workspace
 from core.runtime import require_binary, require_ingestion_capabilities
+from core.subprocesses import console_python_executable, run_process
 from engines.dna_builder import build as build_dna
 
 
@@ -119,11 +118,20 @@ def _metadata_from_json(payload: dict[str, Any], url: str, expected_id: str) -> 
     }
 
 
+def _raise_process_failure(message: str, result: Any) -> None:
+    """Raise a concise UI error while preserving child-process diagnostics in the log."""
+
+    detail = str(getattr(result, "stderr", "") or "").strip()
+    if detail:
+        raise IngestionError(message) from RuntimeError(detail)
+    raise IngestionError(message)
+
+
 def inspect_video(url: str, video_id: str) -> dict[str, Any]:
     """Request metadata only for the video the user explicitly asked to ingest."""
 
     command = [
-        sys.executable,
+        console_python_executable(),
         "-m",
         "yt_dlp",
         "--no-playlist",
@@ -131,9 +139,9 @@ def inspect_video(url: str, video_id: str) -> dict[str, Any]:
         "--dump-single-json",
         url,
     ]
-    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    result = run_process(command, capture_output=True, text=True, check=False)
     if result.returncode != 0:
-        raise IngestionError("yt-dlp could not read the requested YouTube video.")
+        _raise_process_failure("yt-dlp could not read the requested YouTube video.", result)
     try:
         return _metadata_from_json(json.loads(result.stdout), url, video_id)
     except json.JSONDecodeError as error:
@@ -148,7 +156,7 @@ def download_audio(url: str, metadata: dict[str, Any], destination: Path) -> Pat
     output_template = destination / f"{video_id}_{safe_filename(metadata['title'])}.%(ext)s"
     ffmpeg_path = require_binary("ffmpeg")
     command = [
-        sys.executable,
+        console_python_executable(),
         "-m",
         "yt_dlp",
         "--no-playlist",
@@ -163,9 +171,9 @@ def download_audio(url: str, metadata: dict[str, Any], destination: Path) -> Pat
         str(output_template),
         url,
     ]
-    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    result = run_process(command, capture_output=True, text=True, check=False)
     if result.returncode != 0:
-        raise IngestionError("yt-dlp could not download or convert the requested audio.")
+        _raise_process_failure("yt-dlp could not download or convert the requested audio.", result)
 
     candidates = sorted(destination.glob(f"{video_id}_*.wav"), key=lambda item: item.stat().st_mtime)
     if not candidates:

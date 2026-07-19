@@ -1,6 +1,9 @@
 import subprocess
 import re
 
+from core.subprocesses import run_process
+
+
 def value(pattern, text):
     m = re.search(pattern, text)
     return float(m.group(1)) if m else None
@@ -18,7 +21,7 @@ def analyze(audio):
         "-"
     ]
 
-    r = subprocess.run(
+    r = run_process(
         cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

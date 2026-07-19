@@ -67,6 +67,17 @@ def test_safe_filename_removes_portability_hazards():
     assert ingestion.safe_filename("...") == "untitled"
 
 
+def test_yt_dlp_error_stderr_is_preserved_as_a_loggable_cause(monkeypatch):
+    failed = type("Result", (), {"returncode": 1, "stderr": "video unavailable"})()
+    monkeypatch.setattr(ingestion, "run_process", lambda *_args, **_kwargs: failed)
+
+    with pytest.raises(ingestion.IngestionError, match="could not read") as error:
+        ingestion.inspect_video(URL, VIDEO_ID)
+
+    assert isinstance(error.value.__cause__, RuntimeError)
+    assert str(error.value.__cause__) == "video unavailable"
+
+
 def test_ingest_runs_download_analysis_persistence_and_summary(monkeypatch, tmp_path: Path):
     state, samples, reports, workspace, calls = configure_pipeline(monkeypatch, tmp_path)
     monkeypatch.setattr(ingestion, "inspect_video", lambda *_args: metadata())

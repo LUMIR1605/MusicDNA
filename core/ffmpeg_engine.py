@@ -2,6 +2,7 @@ import subprocess
 import numpy as np
 
 from core.runtime import require_binary
+from core.subprocesses import run_process
 
 SR = 48000
 
@@ -20,9 +21,10 @@ def load_pcm(path, sample_rate=SR, mono=True):
         "-"
     ]
 
-    result = subprocess.run(
+    result = run_process(
         cmd,
         stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         check=True
     )
 
