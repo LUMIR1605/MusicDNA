@@ -1,61 +1,35 @@
-import sys
+"""Do not narrate an emotional journey from uncertain structure."""
 
-def analyze(dna):
+from __future__ import annotations
 
-    print("=== EMOTION JOURNEY ENGINE v1 ===")
-    print()
 
-    journey = []
-
+def analyze(dna: dict) -> list[dict]:
     structure = dna.get("structure", [])
-    energy = dna.get("energy", {})
-    harmony = dna.get("harmony", {})
-    emotions = dna.get("emotion", {}).get("labels", [])
-
-    avg_energy = energy.get("avg", 0)
-    mode = harmony.get("mode")
-
-    for section in structure:
-
-        part = section["type"]
-
-        if part == "INTRO":
-            state = "Reflection"
-
-        elif part == "VERSE":
-            if "Longing" in emotions:
-                state = "Longing"
-            else:
-                state = "Story"
-
-        elif part == "BUILD":
-            state = "Tension"
-
-        elif part == "CHORUS":
-            if avg_energy > 3500:
-                state = "Release"
-            else:
-                state = "Hope"
-
-        else:
-            state = "Unknown"
-
-        journey.append({
+    emotion = dna.get("emotion", {})
+    usable = bool(structure) and emotion.get("status") == "estimated" and all(
+        section.get("status", "estimated") == "estimated" for section in structure
+    )
+    if not usable:
+        return [
+            {
+                "start": section["start"],
+                "end": section["end"],
+                "emotion": "UNKNOWN",
+                "status": "unavailable",
+                "confidence": 0.0,
+                "reason": "Structure or emotion measurement is uncertain; no emotional journey is inferred.",
+            }
+            for section in structure
+        ]
+    # Kept as a conservative compatibility path for externally validated sections.
+    return [
+        {
             "start": section["start"],
             "end": section["end"],
-            "emotion": state
-        })
-
-    print("Emotional Journey")
-    print()
-
-    for j in journey:
-        print(
-            f'{j["start"]:6.1f}s - {j["end"]:6.1f}s   {j["emotion"]}'
-        )
-
-    return journey
-
-
-if __name__ == "__main__":
-    print("Emotion Journey działa jako moduł dna_builder.")
+            "emotion": "UNKNOWN",
+            "status": "uncertain",
+            "confidence": 0.0,
+            "reason": "No validated mapping from musical form to emotion is available.",
+        }
+        for section in structure
+    ]

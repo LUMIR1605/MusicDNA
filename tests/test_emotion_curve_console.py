@@ -28,15 +28,29 @@ def test_emotion_curve_console_output_is_safe_for_cp1250(monkeypatch):
     dna = {
         "energy": {"avg": 4000},
         "structure": [
-            {"type": "INTRO", "start": 0.0, "end": 1.0},
-            {"type": "CHORUS", "start": 1.0, "end": 2.0},
+            {"type": "UNKNOWN", "start": 0.0, "end": 1.0, "status": "uncertain"},
+            {"type": "UNKNOWN", "start": 1.0, "end": 2.0, "status": "uncertain"},
         ],
     }
 
     curve = analyze(dna)
 
     assert curve == [
-        {"start": 0.0, "end": 1.0, "score": 35},
-        {"start": 1.0, "end": 2.0, "score": 90},
+        {
+            "start": 0.0,
+            "end": 1.0,
+            "score": None,
+            "status": "unavailable",
+            "confidence": 0.0,
+            "reason": "Structure measurement is uncertain; no emotion curve is inferred.",
+        },
+        {
+            "start": 1.0,
+            "end": 2.0,
+            "score": None,
+            "status": "unavailable",
+            "confidence": 0.0,
+            "reason": "Structure measurement is uncertain; no emotion curve is inferred.",
+        },
     ]
-    assert "#######" in "".join(stdout.parts)
+    assert "#" not in "".join(stdout.parts)

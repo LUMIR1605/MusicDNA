@@ -1,54 +1,31 @@
-import math
+"""Do not emit a numeric emotion curve when structure is uncertain."""
 
-def analyze(dna):
+from __future__ import annotations
 
-    print("=== EMOTION CURVE ENGINE v1 ===")
-    print()
 
-    curve = []
-
-    energy = dna.get("energy", {})
+def analyze(dna: dict) -> list[dict]:
     structure = dna.get("structure", [])
-
-    avg = energy.get("avg", 0)
-
-    for s in structure:
-
-        value = 40
-
-        if s["type"] == "INTRO":
-            value -= 15
-
-        elif s["type"] == "VERSE":
-            value += 0
-
-        elif s["type"] == "BUILD":
-            value += 25
-
-        elif s["type"] == "CHORUS":
-            value += 40
-
-        if avg > 3500:
-            value += 10
-
-        value = max(0, min(100, value))
-
-        curve.append({
-            "start": s["start"],
-            "end": s["end"],
-            "score": value
-        })
-
-    for c in curve:
-
-        bar = "#" * (c["score"] // 5)
-
-        print(
-            f'{c["start"]:6.1f}s {c["score"]:3d} {bar}'
-        )
-
-    return curve
-
-
-if __name__ == "__main__":
-    print("Emotion Curve działa jako moduł dna_builder.")
+    usable = bool(structure) and all(section.get("status", "estimated") == "estimated" for section in structure)
+    if not usable:
+        return [
+            {
+                "start": section["start"],
+                "end": section["end"],
+                "score": None,
+                "status": "unavailable",
+                "confidence": 0.0,
+                "reason": "Structure measurement is uncertain; no emotion curve is inferred.",
+            }
+            for section in structure
+        ]
+    return [
+        {
+            "start": section["start"],
+            "end": section["end"],
+            "score": None,
+            "status": "uncertain",
+            "confidence": 0.0,
+            "reason": "No validated mapping from musical form to emotion score is available.",
+        }
+        for section in structure
+    ]
