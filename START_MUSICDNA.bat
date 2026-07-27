@@ -2,6 +2,11 @@
 setlocal
 set "MUSICDNA_ROOT=%~dp0"
 
+if exist "%MUSICDNA_ROOT%.venv\Scripts\pythonw.exe" (
+    start "" "%MUSICDNA_ROOT%.venv\Scripts\pythonw.exe" "%MUSICDNA_ROOT%START_MUSICDNA.pyw"
+    exit /b 0
+)
+
 where pyw >nul 2>&1
 if not errorlevel 1 (
     start "" pyw "%MUSICDNA_ROOT%START_MUSICDNA.pyw"
