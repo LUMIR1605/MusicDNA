@@ -64,12 +64,7 @@ def build(audio_file, title=None, metadata=None):
     dna["pitch"] = analyze_pitch(audio_file)
 
     print("Loading Melody...")
-    melody = melody_analyze(audio_file)
-    dna["melody"] = {
-        "frames": len(melody),
-        "first": melody[0] if melody else None,
-        "last": melody[-1] if melody else None,
-    }
+    dna["melody"] = melody_analyze(audio_file)
 
     print("Loading Harmony...")
     dna["harmony"] = harmony_analyze(audio_file)

@@ -40,7 +40,11 @@ def stub_builder_dependencies(monkeypatch, rhythm):
         lambda _: [{"type": "INTRO", "start": 0.0, "end": 1.0}],
     )
     monkeypatch.setattr(dna_builder, "analyze_pitch", lambda _: {})
-    monkeypatch.setattr(dna_builder, "melody_analyze", lambda _: [])
+    monkeypatch.setattr(
+        dna_builder,
+        "melody_analyze",
+        lambda _: {"frames": 0, "first": None, "last": None, "values": [], "status": "uncertain", "confidence": 0.0},
+    )
     monkeypatch.setattr(dna_builder, "harmony_analyze", lambda _: {})
     monkeypatch.setattr(dna_builder, "emotion_analyze", lambda _: {})
     monkeypatch.setattr(
