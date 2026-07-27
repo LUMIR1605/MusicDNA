@@ -31,6 +31,16 @@ def test_add_command_reports_expected_ingestion_error(monkeypatch, capsys):
     assert "MusicDNA add failed: bad URL" in capsys.readouterr().out
 
 
+def test_add_command_passes_local_file_to_ingestion(monkeypatch, capsys, tmp_path: Path):
+    source = tmp_path / "Suno export.mp3"
+    source.write_bytes(b"audio")
+    received: list[str] = []
+    monkeypatch.setattr(musicdna, "ingest", lambda value: received.append(value) or IngestionResult("file-0123456789abcdef01234567", "completed", "Suno export", None, None, None))
+
+    assert musicdna.main(["add", str(source)]) == 0
+    assert received == [str(source)]
+
+
 def test_publish_pending_command_reports_retryable_result(monkeypatch, capsys):
     monkeypatch.setattr(
         musicdna,

@@ -21,11 +21,12 @@ from core.runtime import RuntimeCapabilityError
 
 try:
     import tkinter as tk
-    from tkinter import messagebox, scrolledtext
+    from tkinter import filedialog, messagebox, scrolledtext
 except ImportError:  # pragma: no cover - covered by the Windows startup fallback.
     tk = None
     messagebox = None
     scrolledtext = None
+    filedialog = None
 
 
 def open_report(report_path: Path) -> None:
@@ -119,8 +120,8 @@ if tk is not None:
             self._running = False
             self._closing = False
             self._workspace_path: Path | None = None
-            self.url = tk.StringVar()
-            self.status = tk.StringVar(value="Paste one YouTube video link to begin.")
+            self.source = tk.StringVar()
+            self.status = tk.StringVar(value="Paste a supported link or choose a local audio file to begin.")
             self.result = tk.StringVar(value="")
             self.publication = tk.StringVar(value=publication_status_label())
 
@@ -139,7 +140,7 @@ if tk is not None:
             title.pack(anchor="w")
             subtitle = tk.Label(
                 self,
-                text="Paste a YouTube video link. MusicDNA will save the sample and report locally.",
+                text="Paste one link supported by yt-dlp, or choose a local WAV, MP3, FLAC, M4A, OGG, OPUS, WEBM, or MP4 file.",
                 font=("Segoe UI", 10),
                 fg="#b7c9d8",
                 bg="#101820",
@@ -148,9 +149,24 @@ if tk is not None:
             )
             subtitle.pack(anchor="w", pady=(4, 16))
 
-            self.url_entry = tk.Entry(self, textvariable=self.url, font=("Segoe UI", 11))
-            self.url_entry.pack(fill="x", ipady=7)
-            self.url_entry.focus_set()
+            self.source_entry = tk.Entry(self, textvariable=self.source, font=("Segoe UI", 11))
+            self.source_entry.pack(fill="x", ipady=7)
+            self.source_entry.focus_set()
+
+            self.file_button = tk.Button(
+                self,
+                text="CHOOSE LOCAL FILE",
+                command=self.choose_file,
+                font=("Segoe UI", 9, "bold"),
+                bg="#27485a",
+                fg="#e8f4ff",
+                activebackground="#315d72",
+                activeforeground="#ffffff",
+                relief="flat",
+                padx=14,
+                pady=6,
+            )
+            self.file_button.pack(anchor="w", pady=(8, 0))
 
             self.start_button = tk.Button(
                 self,
@@ -269,22 +285,36 @@ if tk is not None:
         def start(self) -> None:
             if self._running:
                 return
-            url = self.url.get().strip()
+            source = self.source.get().strip()
             try:
-                validate_add_url(url)
+                validate_add_url(source)
             except IngestionError as error:
-                self.status.set("The YouTube link needs attention.")
+                self.status.set("The link or file needs attention.")
                 messagebox.showerror("MusicDNA", str(error), parent=self)
                 return
 
             self._running = True
             self.start_button.configure(state="disabled")
+            self.file_button.configure(state="disabled")
             self.publish_button.configure(state="disabled")
             self._set_workspace_controls(None)
             self.result.set("")
             self.status.set("Starting MusicDNA...")
             self._append_progress("Starting MusicDNA...")
-            threading.Thread(target=self._run_pipeline, args=(url,), daemon=True).start()
+            threading.Thread(target=self._run_pipeline, args=(source,), daemon=True).start()
+
+        def choose_file(self) -> None:
+            selected = filedialog.askopenfilename(
+                parent=self,
+                title="Choose audio or video file for MusicDNA",
+                filetypes=[
+                    ("Supported audio and video", "*.wav *.mp3 *.flac *.m4a *.ogg *.opus *.webm *.mp4"),
+                    ("All files", "*.*"),
+                ],
+            )
+            if selected:
+                self.source.set(selected)
+                self.status.set("Local file selected. Press START to analyze it.")
 
         def publish_pending(self) -> None:
             if self._running:
@@ -297,9 +327,9 @@ if tk is not None:
             self._append_progress("Publishing completed MusicDNA results...")
             threading.Thread(target=self._run_publication, daemon=True).start()
 
-        def _run_pipeline(self, url: str) -> None:
+        def _run_pipeline(self, source: str) -> None:
             try:
-                result = run_add(url, lambda message: self._events.put(("progress", message)))
+                result = run_add(source, lambda message: self._events.put(("progress", message)))
             except (IngestionError, RuntimeCapabilityError) as error:
                 self._events.put(("error", (str(error), write_failure_log(error))))
             except Exception as error:
@@ -373,6 +403,7 @@ if tk is not None:
         def _finish_with_error(self, message: str, log_path: Path) -> None:
             self._running = False
             self.start_button.configure(state="normal")
+            self.file_button.configure(state="normal")
             self.publish_button.configure(state="normal")
             self.status.set("MusicDNA could not finish the job.")
             self._append_progress(f"Error: {message}")
@@ -424,6 +455,7 @@ if tk is not None:
         def _finish_with_success(self, result: IngestionResult) -> None:
             self._running = False
             self.start_button.configure(state="normal")
+            self.file_button.configure(state="normal")
             self.publish_button.configure(state="normal")
             self.status.set("Analysis complete")
             self._refresh_publication_status()
@@ -447,6 +479,7 @@ if tk is not None:
         def _finish_with_publication(self, result: Any) -> None:
             self._running = False
             self.start_button.configure(state="normal")
+            self.file_button.configure(state="normal")
             self.publish_button.configure(state="normal")
             self._refresh_publication_status()
             self.result.set(

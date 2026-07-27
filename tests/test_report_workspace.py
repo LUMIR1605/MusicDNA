@@ -129,6 +129,26 @@ def test_workspace_never_copies_media_or_internal_paths(tmp_path: Path):
         assert forbidden not in text
 
 
+def test_workspace_accepts_local_source_without_exporting_its_path(tmp_path: Path):
+    source_id = "file-0123456789abcdef01234567"
+    metadata = {
+        "id": source_id,
+        "title": "Suno summer song",
+        "source_type": "file",
+        "source_name": "private source.mp3",
+        "uploader": "",
+        "duration": None,
+    }
+
+    workspace = create_report_workspace(source_id, metadata, _dna(), workspace_root=tmp_path / "reports")
+
+    package = json.loads(workspace.package_path.read_text(encoding="utf-8"))
+    assert package["metadata"]["source_type"] == "file"
+    assert package["metadata"]["source_url"] is None
+    assert "Source: local audio file" in workspace.summary_path.read_text(encoding="utf-8")
+    assert "private source.mp3" not in workspace.package_path.read_text(encoding="utf-8")
+
+
 def test_workspace_rejects_private_dna_or_arbitrary_metadata_paths(tmp_path: Path):
     root = tmp_path / "Desktop" / "MusicDNA Reports"
     metadata = {**_metadata(), "sample_path": r"C:\\Users\\private.wav", "uploader": {"path": r"C:\\Users"}}

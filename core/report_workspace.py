@@ -15,7 +15,7 @@ from core.paths import desktop_reports_directory, ensure_directory, write_json_a
 
 
 FOLDER_UNSAFE = re.compile(r"[^A-Za-z0-9._-]+")
-VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{11}$")
+SOURCE_ID_PATTERN = re.compile(r"^(?:[A-Za-z0-9_-]{11}|(?:url|file)-[0-9a-f]{24})$")
 PACKAGE_VERSION = "musicdna-analysis-package-v1"
 PACKAGE_FILES = ("summary.md", "analysis_package.json", "metadata.json")
 PRIVATE_FIELD_NAMES = frozenset(
@@ -131,19 +131,31 @@ def _restore_package(directory: Path, previous: dict[str, bytes | None]) -> None
         directory.rmdir()
 
 
-def _safe_metadata(metadata: dict[str, Any], video_id: str) -> dict[str, Any]:
+def _safe_metadata(metadata: dict[str, Any], source_id: str) -> dict[str, Any]:
+    if metadata.get("id") != source_id:
+        raise ReportWorkspaceError("The completed analysis metadata does not match its source ID.")
+    source_type = metadata.get("source_type", "url")
+    if source_type not in {"url", "file"}:
+        raise ReportWorkspaceError("The completed analysis has an unsupported source type.")
     source_url = metadata.get("webpage_url")
-    if not isinstance(source_url, str) or not source_url:
-        raise ReportWorkspaceError("The completed analysis has no source URL.")
-    if _youtube_video_id_from_url(source_url) != video_id:
-        raise ReportWorkspaceError("The completed analysis source URL does not match its video ID.")
+    if source_type == "url":
+        parsed = urlparse(source_url) if isinstance(source_url, str) else None
+        if parsed is None or parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ReportWorkspaceError("The completed analysis has no valid source URL.")
+        youtube_id = _youtube_video_id_from_url(source_url)
+        if youtube_id is not None and youtube_id != source_id:
+            raise ReportWorkspaceError("The completed analysis source URL does not match its video ID.")
+    else:
+        source_url = None
     title = metadata.get("title")
     if not isinstance(title, str) or not title:
         raise ReportWorkspaceError("The completed analysis has no track title.")
     uploader = metadata.get("uploader")
     duration = metadata.get("duration")
     return {
-        "video_id": video_id,
+        "source_id": source_id,
+        "video_id": source_id,
+        "source_type": source_type,
         "title": title,
         "source_url": source_url,
         "uploader": uploader if isinstance(uploader, str) else "",
@@ -199,13 +211,18 @@ def _summary_markdown(metadata: dict[str, Any], dna: dict[str, Any]) -> str:
     bpm = rhythm.get("bpm") if isinstance(rhythm.get("bpm"), dict) else {}
     transients = rhythm.get("transients") if isinstance(rhythm.get("transients"), dict) else {}
     bpm_value = bpm.get("value") if bpm.get("status") == "estimated" else "unavailable"
+    source_line = (
+        f"- Source URL: {metadata['source_url']}"
+        if metadata["source_type"] == "url"
+        else "- Source: local audio file"
+    )
     return "\n".join(
         [
             "# MusicDNA report",
             "",
             f"- Title: {metadata['title']}",
-            f"- YouTube video ID: {metadata['video_id']}",
-            f"- Source URL: {metadata['source_url']}",
+            f"- Source ID: {metadata['source_id']}",
+            source_line,
             f"- Transient candidates: {transients.get('count', 'unavailable')}",
             f"- Estimated BPM: {bpm_value}",
             "",
@@ -214,7 +231,7 @@ def _summary_markdown(metadata: dict[str, Any], dna: dict[str, Any]) -> str:
 
 
 def create_report_workspace(
-    video_id: str,
+    source_id: str,
     metadata: dict[str, Any],
     dna: dict[str, Any],
     *,
@@ -223,15 +240,15 @@ def create_report_workspace(
 ) -> ReportWorkspace:
     """Synchronize one safe desktop report folder without moving local artifacts."""
 
-    if not isinstance(video_id, str) or not VIDEO_ID_PATTERN.fullmatch(video_id):
+    if not isinstance(source_id, str) or not SOURCE_ID_PATTERN.fullmatch(source_id):
         raise ReportWorkspaceError("The completed analysis has an invalid video ID.")
     if not isinstance(dna, dict):
         raise ReportWorkspaceError("The completed DNA artifact is unreadable.")
 
-    safe_metadata = _safe_metadata(metadata, video_id)
+    safe_metadata = _safe_metadata(metadata, source_id)
     _reject_private_dna_fields(dna)
     root = desktop_reports_directory() if workspace_root is None else Path(workspace_root)
-    directory = root / f"{video_id}_{safe_track_name(safe_metadata['title'])}"
+    directory = root / f"{source_id}_{safe_track_name(safe_metadata['title'])}"
     if directory.exists():
         _reject_unexpected_entries(directory)
     previous = _snapshot_package(directory) if directory.is_dir() else {name: None for name in PACKAGE_FILES}

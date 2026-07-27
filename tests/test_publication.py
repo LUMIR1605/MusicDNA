@@ -130,6 +130,28 @@ def test_backfill_skips_already_published_records(monkeypatch, tmp_path: Path):
     assert not second.published
 
 
+def test_publication_keeps_local_source_private(monkeypatch, tmp_path: Path):
+    source_id = "file-0123456789abcdef01234567"
+    dna_path = tmp_path / "dna" / f"{source_id}.json"
+    report_path = tmp_path / "reports" / f"{source_id}_summary.txt"
+    write_json_atomic(dna_path, {"schema_version": "dna-output-v1", "rhythm": {"transients": {"count": 1}, "bpm": {"status": "estimated", "value": 100.0}}})
+    write_text_atomic(report_path, "MusicDNA ingestion summary\nTitle: Suno song\nSource ID: file-0123456789abcdef01234567\nSource: local audio file\n")
+    write_json_atomic(
+        tmp_path / "ingestion" / "state.json",
+        {"version": 1, "items": {source_id: {"id": source_id, "stage": "completed", "metadata": {"id": source_id, "title": "Suno song", "source_type": "file", "source_name": "private song.mp3", "uploader": "", "duration": None}, "sample_path": str(tmp_path / "private" / "song.wav"), "dna_path": str(dna_path), "report_path": str(report_path)}}},
+    )
+    workspace, _calls = _mock_repository(monkeypatch, tmp_path)
+
+    result = publication.publish_pending_results(lambda _message: None, tmp_path)
+
+    assert result.published == [source_id]
+    package = next((workspace / "analyses").glob(f"{source_id}_*"))
+    metadata = json.loads((package / "metadata.json").read_text(encoding="utf-8"))
+    assert metadata["source_type"] == "file"
+    assert metadata["source_url"] is None
+    assert str(tmp_path) not in (package / "summary.md").read_text(encoding="utf-8")
+
+
 def test_discovery_reports_unmatched_or_incomplete_records(tmp_path: Path):
     _seed_completed_records(tmp_path)
     state_path = tmp_path / "ingestion" / "state.json"

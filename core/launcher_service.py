@@ -4,17 +4,27 @@ from __future__ import annotations
 
 from typing import Callable
 
-from core.ingestion import IngestionResult, ingest, validate_youtube_url
+from core.audio_source import SourceError, parse_audio_source
+from core.ingestion import IngestionError, IngestionResult, ingest
+
+
+def validate_add_source(source: str) -> str:
+    """Validate a pasted URL or selected local file before work starts."""
+
+    try:
+        return parse_audio_source(source.strip()).source_id
+    except SourceError as error:
+        raise IngestionError(str(error)) from error
 
 
 def validate_add_url(url: str) -> str:
-    """Validate a pasted URL before the desktop launcher starts work."""
+    """Backward-compatible name for callers that previously accepted only URLs."""
 
-    return validate_youtube_url(url.strip())
+    return validate_add_source(url)
 
 
-def run_add(url: str, progress: Callable[[str], None]) -> IngestionResult:
+def run_add(source: str, progress: Callable[[str], None]) -> IngestionResult:
     """Delegate directly to the same pipeline used by ``musicdna add``."""
 
-    validate_add_url(url)
-    return ingest(url.strip(), progress)
+    validate_add_source(source)
+    return ingest(source.strip(), progress)

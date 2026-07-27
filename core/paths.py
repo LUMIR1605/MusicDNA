@@ -57,6 +57,12 @@ def samples_directory() -> Path:
     return data_root() / "samples"
 
 
+def downloads_directory() -> Path:
+    """Return the private cache used only for unnormalized URL downloads."""
+
+    return data_root() / "downloads"
+
+
 def reports_directory() -> Path:
     return data_root() / "reports"
 
