@@ -185,9 +185,17 @@ def _read_completed_record(video_id: str, record: dict[str, Any]) -> CompletedAn
     metadata = record.get("metadata")
     if not isinstance(metadata, dict) or metadata.get("id") != video_id:
         raise PublicationError("metadata does not match the completed video ID")
+    source_type = metadata.get("source_type", "url")
+    if source_type not in {"url", "file"}:
+        raise PublicationError("metadata has an unsupported source type")
     source_url = metadata.get("webpage_url")
-    if not isinstance(source_url, str) or _video_id_from_url(source_url) != video_id:
-        raise PublicationError("source metadata does not match the completed video ID")
+    if source_type == "url":
+        parsed = urlparse(source_url) if isinstance(source_url, str) else None
+        if parsed is None or parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise PublicationError("source metadata has no valid URL")
+        source_video_id = _video_id_from_url(source_url)
+        if source_video_id is not None and source_video_id != video_id:
+            raise PublicationError("source metadata does not match the completed video ID")
     dna_path = Path(str(record.get("dna_path", "")))
     summary_path = Path(str(record.get("report_path", "")))
     if not dna_path.is_file() or not summary_path.is_file():
@@ -199,9 +207,27 @@ def _read_completed_record(video_id: str, record: dict[str, Any]) -> CompletedAn
     if not isinstance(dna, dict):
         raise PublicationError("DNA artifact has an unsupported format")
     summary = summary_path.read_text(encoding="utf-8")
-    summary_url = next((line[13:].strip() for line in summary.splitlines() if line.startswith("YouTube URL:")), "")
-    if _video_id_from_url(summary_url) != video_id:
-        raise PublicationError("summary does not match the completed video ID")
+    summary_id = next((line[10:].strip() for line in summary.splitlines() if line.startswith("Source ID:")), "")
+    if summary_id and summary_id != video_id:
+        raise PublicationError("summary does not match the completed source ID")
+    if source_type == "url":
+        summary_url = next(
+            (
+                line[11:].strip()
+                for line in summary.splitlines()
+                if line.startswith("Source URL:")
+            ),
+            "",
+        )
+        if not summary_url:  # Compatibility with reports written before source generalization.
+            summary_url = next(
+                (line[13:].strip() for line in summary.splitlines() if line.startswith("YouTube URL:")),
+                "",
+            )
+        if summary_url != source_url:
+            raise PublicationError("summary does not match the completed source URL")
+    elif "Source: local audio file" not in summary:
+        raise PublicationError("summary does not identify the local audio source")
     title = metadata.get("title")
     if not isinstance(title, str) or not title:
         raise PublicationError("completed analysis has no title")
@@ -241,10 +267,13 @@ def discover_completed_analyses(root: Path | None = None) -> tuple[list[Complete
 
 
 def _safe_metadata(record: CompletedAnalysis) -> dict[str, Any]:
+    source_type = record.metadata.get("source_type", "url")
     return {
+        "source_id": record.video_id,
         "video_id": record.video_id,
+        "source_type": source_type,
         "title": record.title,
-        "source_url": record.metadata["webpage_url"],
+        "source_url": record.metadata.get("webpage_url") if source_type == "url" else None,
         "uploader": record.metadata.get("uploader", ""),
         "duration_seconds": record.metadata.get("duration"),
     }
@@ -255,13 +284,19 @@ def _summary_markdown(record: CompletedAnalysis, dna: dict[str, Any]) -> str:
     bpm = rhythm.get("bpm", {}) if isinstance(rhythm.get("bpm"), dict) else {}
     transients = rhythm.get("transients", {}) if isinstance(rhythm.get("transients"), dict) else {}
     bpm_value = bpm.get("value") if bpm.get("status") == "estimated" else "unavailable"
+    source_type = record.metadata.get("source_type", "url")
+    source_line = (
+        f"- Source URL: {record.metadata['webpage_url']}"
+        if source_type == "url"
+        else "- Source: local audio file"
+    )
     return "\n".join(
         [
             "# MusicDNA analysis summary",
             "",
             f"- Title: {record.title}",
-            f"- YouTube video ID: {record.video_id}",
-            f"- Source URL: {record.metadata['webpage_url']}",
+            f"- Source ID: {record.video_id}",
+            source_line,
             f"- Transient candidates: {transients.get('count', 'unavailable')}",
             f"- Estimated BPM: {bpm_value}",
             "",

@@ -96,5 +96,6 @@ def test_batch_launcher_uses_repository_relative_gui_entry_point():
     content = launcher.read_text(encoding="utf-8")
 
     assert "MUSICDNA_ROOT=%~dp0" in content
+    assert ".venv\\Scripts\\pythonw.exe" in content
     assert "pythonw" in content
     assert "START_MUSICDNA.pyw" in content

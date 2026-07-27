@@ -66,11 +66,19 @@ def require_core_capabilities() -> CapabilityReport:
 
 
 def require_ingestion_capabilities() -> CapabilityReport:
-    """Require the local dependencies used by the YouTube ingestion command."""
+    """Backward-compatible alias for URL ingestion requirements."""
 
-    report = check_capabilities(
-        (*CORE_PYTHON_MODULES, *INGESTION_PYTHON_MODULES), CORE_BINARIES
-    )
+    return require_url_ingestion_capabilities()
+
+
+def require_url_ingestion_capabilities() -> CapabilityReport:
+    """Require only the module needed to inspect or download URL sources.
+
+    ffmpeg is intentionally checked by audio normalization so local and URL sources
+    receive the same conversion error at the point where it is actually needed.
+    """
+
+    report = check_capabilities(INGESTION_PYTHON_MODULES)
     if not report.ready:
         raise RuntimeCapabilityError(report)
     return report

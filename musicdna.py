@@ -14,8 +14,8 @@ from core.runtime import RuntimeCapabilityError
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="musicdna", description="MusicDNA command-line tools")
     commands = parser.add_subparsers(dest="command", required=True)
-    add = commands.add_parser("add", help="Download one YouTube video and analyze it")
-    add.add_argument("url", help="YouTube video URL")
+    add = commands.add_parser("add", help="Analyze one yt-dlp URL or supported local audio file")
+    add.add_argument("source", help="URL supported by yt-dlp or local WAV/MP3/FLAC/M4A/OGG/OPUS/WEBM/MP4 file")
     commands.add_parser(
         "publish-pending",
         help="Publish completed local analyses without downloading or analyzing again",
@@ -27,7 +27,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     arguments = build_parser().parse_args(argv)
     if arguments.command == "add":
         try:
-            result = ingest(arguments.url)
+            result = ingest(arguments.source)
         except (IngestionError, RuntimeCapabilityError) as error:
             print(f"MusicDNA add failed: {error}")
             return 2

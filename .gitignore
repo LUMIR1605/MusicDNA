@@ -1,4 +1,9 @@
 __pycache__/
+*.egg-info/
+.pytest-tmp/
+.ffmpeg-integration/
+.direct-yt-dlp/
+.musicdna-url-stage/
 *.pyc
 *.pyo
 *.bak

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from pathlib import Path
 
 from core import launcher_service
 from core.ingestion import IngestionError, IngestionResult
@@ -16,6 +17,13 @@ def test_validate_add_url_accepts_single_video_url():
 def test_validate_add_url_rejects_invalid_url_before_ingestion():
     with pytest.raises(IngestionError):
         launcher_service.validate_add_url("not a URL")
+
+
+def test_validate_add_source_accepts_local_file(tmp_path: Path):
+    source = tmp_path / "Suno export.mp3"
+    source.write_bytes(b"audio")
+
+    assert launcher_service.validate_add_source(str(source)).startswith("file-")
 
 
 def test_run_add_delegates_to_existing_ingestion_pipeline(monkeypatch):
