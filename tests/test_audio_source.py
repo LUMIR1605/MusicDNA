@@ -21,6 +21,14 @@ def test_parse_source_keeps_legacy_youtube_identifier():
     assert source.source_id == "H1HdZFgR-aA"
 
 
+@pytest.mark.parametrize("suffix", [".wav", ".mp3", ".flac", ".m4a", ".ogg", ".opus", ".webm", ".mp4"])
+def test_parse_source_accepts_every_documented_local_format(tmp_path: Path, suffix: str):
+    media = tmp_path / f"Suno export{suffix.upper()}"
+    media.write_bytes(b"fixture")
+
+    assert audio_source.parse_audio_source(str(media)).kind == "file"
+
+
 def test_parse_source_accepts_windows_style_unicode_file_name(tmp_path: Path):
     media = tmp_path / "Suno exports" / "Łódź – mój utwór.MP3"
     media.parent.mkdir()
