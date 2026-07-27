@@ -4,14 +4,17 @@ The ingestion command accepts one URL supported by yt-dlp or one local WAV, MP3,
 
 ## Setup
 
-Install dependencies into the same Python environment that will run MusicDNA and make `ffmpeg` available on PATH:
+On Windows, double-click `SETUP_MUSICDNA.bat`. It creates or reuses `.venv`, installs dependencies, and prepares `ffmpeg.exe` in that environment without a manual PATH change.
+
+For a manual setup, install dependencies into the same Python environment that will run MusicDNA:
 
 ```text
 py -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 .venv\Scripts\python.exe -m pip install -e .
+.\SETUP_MUSICDNA.bat
 .venv\Scripts\python.exe -c "import sys, yt_dlp; print(sys.executable); print(yt_dlp.version.__version__)"
-ffmpeg -version
+.venv\Scripts\ffmpeg.exe -version
 ```
 
 ## Usage

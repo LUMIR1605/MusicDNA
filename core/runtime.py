@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import os
+import sys
 from dataclasses import dataclass
 from importlib.util import find_spec
+from pathlib import Path
 from shutil import which
 from typing import Callable, Iterable
 
@@ -41,6 +44,31 @@ class RuntimeCapabilityError(RuntimeError):
         super().__init__("; ".join(parts))
 
 
+def _venv_binary(name: str) -> str | None:
+    """Return a tool installed beside the active Windows virtual environment."""
+
+    if sys.platform != "win32":
+        return None
+    candidate = Path(sys.executable).resolve().parent / f"{name}.exe"
+    return str(candidate) if candidate.is_file() else None
+
+
+def _find_binary(name: str) -> str | None:
+    """Find a system tool or the installer-managed tool beside this interpreter."""
+
+    return which(name) or _venv_binary(name)
+
+
+def _expose_binary_directory(binary_path: str) -> None:
+    """Let unchanged engines resolve an installer-managed executable by name."""
+
+    directory = str(Path(binary_path).parent)
+    current_path = os.environ.get("PATH", "")
+    entries = current_path.split(os.pathsep) if current_path else []
+    if directory.lower() not in {entry.lower() for entry in entries}:
+        os.environ["PATH"] = directory if not current_path else directory + os.pathsep + current_path
+
+
 def check_capabilities(
     python_modules: Iterable[str] = (),
     binaries: Iterable[str] = (),
@@ -59,7 +87,7 @@ def check_capabilities(
 def require_core_capabilities() -> CapabilityReport:
     """Require only the packages and binary needed by the active audio builder."""
 
-    report = check_capabilities(CORE_PYTHON_MODULES, CORE_BINARIES)
+    report = check_capabilities(CORE_PYTHON_MODULES, CORE_BINARIES, binary_finder=_find_binary)
     if not report.ready:
         raise RuntimeCapabilityError(report)
     return report
@@ -96,7 +124,8 @@ def require_publication_capabilities() -> CapabilityReport:
 def require_binary(name: str) -> str:
     """Return a binary path or raise the same structured capability error."""
 
-    binary_path = which(name)
+    binary_path = _find_binary(name)
     if binary_path is None:
         raise RuntimeCapabilityError(CapabilityReport((), (name,)))
+    _expose_binary_directory(binary_path)
     return binary_path

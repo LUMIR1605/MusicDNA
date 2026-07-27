@@ -9,7 +9,9 @@ Every source is normalized with ffmpeg to mono, 48 kHz PCM WAV before it reaches
 
 ## Setup and checks
 
-Use the same Python environment for the launcher and the command line. On Windows, an isolated environment is the most reliable setup:
+On Windows, double-click `SETUP_MUSICDNA.bat`. It creates `.venv` only when needed, installs the project, and prepares a private `ffmpeg.exe` inside that environment; no system `PATH` editing is needed.
+
+For a manual setup, use the same Python environment for the launcher and the command line:
 
 ```text
 py -m venv .venv
@@ -17,14 +19,14 @@ py -m venv .venv
 .venv\Scripts\python.exe -m pip install -e .
 ```
 
-Install ffmpeg and make `ffmpeg.exe` available on `PATH`, then verify the exact runtime used by MusicDNA:
+Then run `SETUP_MUSICDNA.bat` once to prepare `ffmpeg.exe`. The installer provides it from the declared `imageio-ffmpeg` dependency. To verify the exact runtime used by MusicDNA:
 
 ```text
 .venv\Scripts\python.exe -c "import sys, yt_dlp; print(sys.executable); print(yt_dlp.version.__version__)"
-ffmpeg -version
+.venv\Scripts\ffmpeg.exe -version
 ```
 
-`START_MUSICDNA.bat` prefers `.venv\Scripts\pythonw.exe` when it exists, so the GUI uses that same environment.
+`START_MUSICDNA.bat` prefers `.venv\Scripts\pythonw.exe` when it exists and adds the prepared ffmpeg location to the launcher process, so the GUI uses that same environment.
 
 ## Analyze a link or Suno file
 

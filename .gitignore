@@ -1,9 +1,13 @@
 __pycache__/
 *.egg-info/
 .pytest-tmp/
+.pytest-final-*/
 .ffmpeg-integration/
 .direct-yt-dlp/
 .musicdna-url-stage/
+.final-e2e-data/
+.final-url-e2e-data/
+.final-e2e-workspace/
 *.pyc
 *.pyo
 *.bak

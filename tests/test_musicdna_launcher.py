@@ -97,5 +97,20 @@ def test_batch_launcher_uses_repository_relative_gui_entry_point():
 
     assert "MUSICDNA_ROOT=%~dp0" in content
     assert ".venv\\Scripts\\pythonw.exe" in content
-    assert "pythonw" in content
-    assert "START_MUSICDNA.pyw" in content
+    assert ":configure_ffmpeg" in content
+    assert "MUSICDNA_FFMPEG_DIR" in content
+
+
+def test_setup_batch_reuses_venv_and_reports_required_components():
+    setup = Path(__file__).resolve().parents[1] / "SETUP_MUSICDNA.bat"
+    content = setup.read_text(encoding="utf-8")
+
+    assert 'if exist ".venv\\Scripts\\python.exe"' in content
+    assert "requirements-dev.txt" in content
+    assert 'pip install -e .' in content
+    assert "import numpy, yt_dlp" in content
+    assert "imageio_ffmpeg" in content
+    assert "ffmpeg.exe" in content
+    assert "ffmpeg.exe" in content
+    assert "[BLAD]" in content
+    assert "START_MUSICDNA.bat" in content
